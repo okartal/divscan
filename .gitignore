@@ -1,3 +1,13 @@
 .snakemake
 \#*
 __*
+paper/auto/
+paper/*.aux
+paper/*.bbl
+paper/*.bcf
+paper/*.blg
+paper/*.dvi
+paper/*.log
+paper/*.run.xml
+paper/*.synctex.gz
+									
