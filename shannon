@@ -1,0 +1,341 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Feb 24 14:33:09 2016
+
+@author: oender
+"""
+
+import argparse
+import functools
+import glob
+from itertools import compress
+import numpy as np
+import os
+import pandas as pd
+import sys
+import collections
+import subprocess
+import math
+import numexpr as ne
+
+def shannon():
+    '''Command line interface for shannon script.
+    '''
+
+    parser = argparse.ArgumentParser()
+
+    parser.prog = 'shannon'
+
+    parser.description = '''A package for measuring population diversity based
+                            on Information Theory.'''
+
+    parser.add_argument('-v', '--version', action='version', version='%(prog)s 0.1.0')
+    parser.add_argument('-o', '--output', metavar='FILE')
+    parser.add_argument('-m', '--metadata', metavar='PATH',
+                        help='''
+                        A csv file that contains population metadata.
+                        ''')
+    parser.add_argument('-q', '--query', metavar='"STR"', type=str,
+                        help='''
+                        An expression in double quotes that defines the set on which the
+                        diversity index is calculated.
+                        Needs metadata and a path to a folder to locate the input files.
+                        ''')
+    parser.add_argument('-g', '--groupby', metavar='STR', nargs='+', type=str,
+                        help='''
+                        The variable or factor/relation according to which the
+                        queried set is partitioned. Needs metadata and a path to a folder to locate the input files..
+                        ''')
+    parser.add_argument('contig', type=str,
+                        help='''
+                        Contig ID for which computations are done.
+                        ''')
+    parser.add_argument('path', nargs='+',
+                        help='''
+                        A list of filepaths or a pattern with wildcard that returns an appropriate list of
+                        files.
+                        ''')
+
+    process_arguments(args=parser.parse_args())
+
+    pass
+
+def process_arguments(args=None):
+
+    suffix = "div"
+
+    if not args.output:
+        # give it a default generic name
+        args.output = ".".join([args.contig, suffix])
+
+    # TODO: use path module to properly handle path objects instead of string-fu
+    if not args.metadata:
+
+        if (args.query or args.groupby):
+            print('[INPUT ERROR]')
+            print('Please supply --metadata if you want to use --query and/or --groupby!')
+            sys.exit()
+        else:
+            filenames = get_filenames(args.path)
+            labels = [f.split('.')[0] for f in filenames]
+            process_data(filenames, labels, args)
+
+    else:
+
+        meta = pd.read_table(args.metadata, header=0)
+        files = get_filenames(args.path)
+
+        if args.query and not args.groupby:
+            queryset = meta.query(args.query)
+            labels = queryset["label"]
+            filenames = [name for name in files if any(name.find(label) != -1 for label in labels)]
+            args.output = ".".join([args.contig, args.query, suffix]).replace("==", "_").replace("'", "")
+            process_data(filenames, queryset["label"], args)
+            print('[QUERY DATA]')
+            print("\n".join(filenames))
+            print('[OUTPUT FILE]')
+            print(args.output)
+
+        if args.groupby:
+
+            if not args.query:
+                quotientset = meta.groupby(args.groupby)
+            else:
+                quotientset = meta.query(args.query).groupby(args.groupby)
+
+            for key, group in quotientset:
+
+                labels = group["label"]
+
+                filenames = [name for name in files if any(name.find(label) != -1 for label in labels) and name.endswith('.gz')]
+
+                if type(key) is not tuple:
+                    key = (str(key), )
+                else:
+                    key = tuple(str(el) for el in key)
+
+                groups = list(zip(args.groupby, key))
+
+                groupby = "^".join(["_".join(g) for g in groups])
+
+                if args.query:
+                    args.output = ".".join([args.contig, args.query, groupby, suffix])
+                else:
+                    args.output = ".".join([args.contig, groupby, suffix])
+
+                args.output = args.output.replace("==", "_").replace("'", "")
+
+                process_data(filenames, labels=labels, args=args)
+
+                print('[GROUP DATA]')
+                print("\n".join(filenames))
+                print('[GROUP FILE]')
+                print(args.output)
+
+        if not args.query and not args.groupby:
+            print('[NOTE]')
+            print('Metadata is ignored if no --query or --groupby is given.\n'
+                  'We assume that the file prefix is the label of the sample.')
+            filenames = files
+            labels = [f.split('.')[0] for f in filenames]
+            process_data(filenames, labels, args)
+
+    pass
+
+def get_filenames(file_input, metadata=None):
+    '''Checks the file input to get the list of filenames.
+    '''
+
+    filenames = []
+
+    if len(file_input) > 1:
+        filenames = file_input
+    elif len(file_input) == 1:
+        try:
+            filenames = os.listdir(*file_input)
+        except NotADirectoryError as e:
+            print('[INPUT ERROR]')
+            print('There is only one data file!')
+            sys.exit()
+        except FileNotFoundError as e:
+            # we assume first that it is a pattern with wildcard
+            filenames = glob.glob(*file_input)
+            if not filenames:
+                print('[INPUT ERROR]')
+                print('There are no data files to read!')
+                sys.exit()
+
+    print('[INPUT DATA]')
+    print(*filenames, sep='\n')
+
+    return filenames
+
+def contig_supremum(tabixfiles, contig):
+    '''Get the least upper bound on chromEnd for the set of files.
+    '''
+    chromEnd = list()
+    for f in tabixfiles:
+        p1 = subprocess.Popen(["tabix", f, contig], stdout=subprocess.PIPE)
+        p2 = subprocess.Popen(["tail", "-1"], stdin=p1.stdout, stdout=subprocess.PIPE)
+        p3 = subprocess.Popen(["cut", "-f3"], stdin=p2.stdout, stdout=subprocess.PIPE)
+        p1.stdout.close()  # Allow p1 to receive a SIGPIPE if p2 exits.
+        output = int(p3.communicate()[0])
+        chromEnd.append(output)
+
+    return np.max(chromEnd)
+
+def nsites_supremum(tabixfiles, contig):
+    '''Get the least upper bound on chromEnd for the set of files.
+    '''
+    sites_covered = list()
+    for f in tabixfiles:
+        p1 = subprocess.Popen(["tabix", f, contig], stdout=subprocess.PIPE)
+        p2 = subprocess.Popen(["wc", "-l"], stdin=p1.stdout, stdout=subprocess.PIPE)
+        p1.stdout.close()  # Allow p1 to receive a SIGPIPE if p2 exits.
+        output = int(p2.communicate()[0])
+        sites_covered.append(output)
+
+    return np.max(sites_covered)
+
+def entropy(counts, axis=1, method='mle'):
+    """Entropy of probability mass functions.
+
+    TODO
+    - specify units in terms of log base
+    """
+
+    expression = "sum(where(pr > 0, -pr * log(pr), 0), axis={})".format(axis)
+
+    if method == 'mle':
+        '''Maximum-likelihood/plug-in/non-parametric estimator
+        '''
+        sumCounts = counts.sum(axis)[..., np.newaxis]
+        pr = counts/sumCounts
+        result = ne.evaluate(expression)
+
+    return result
+
+def impute(data, method='pseudocount'):
+    if method == 'pseudocount':
+        # given by the parameters of a uninformative Dirichlet prior on the probabilities
+        value = 1
+    return value
+
+def group_statistics(data):
+
+    # input
+
+    samples = data.columns.levels[0]
+    alphabet = data.columns.levels[1]
+    counts = data.values.reshape(-1, len(samples), len(alphabet))
+
+    stats = dict()
+
+    # some necessary calculations
+
+    sum_alphabet = np.nansum(counts, axis=1)
+    sum_sample = np.nansum(counts, axis=2)
+    entropy_sample = entropy(counts, axis=2)
+    weight_sample = sum_sample/sum_sample.sum(axis=1)[..., np.newaxis]
+
+    # assignments
+
+    stats['sample_size'] = np.sum(np.all(~np.isnan(counts), axis=2), axis=1)
+
+    for ix, base in enumerate(alphabet):
+        # assuming that order of bases is the same in alphabet and subarray
+        stats['sum' + base] = np.uint(sum_alphabet[:, ix])
+
+    stats['wavgMeth'] = stats['sumE'] / (stats['sumE'] + stats['sumC'])
+
+    stats['mixH'] = entropy(sum_alphabet)
+
+    stats['jsd'] = stats['mixH'] - np.average(entropy_sample, weights=weight_sample, axis=1)
+
+    return stats
+
+def process_data(filenames, labels=None, args=None, filetype='bismark_coverage'):
+    '''Combine input data to read count information.
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    Notes
+    -----
+
+    '''
+    # the number of desired data points per region
+    COVERAGE = 1e4
+
+    column = collections.OrderedDict()
+
+    if filetype == 'bismark_coverage':
+        column[0] = '#chrom'
+        column[1] = 'chromStart'
+        column[2] = 'chromEnd'
+        column[4] = 'E' # my nucleotide code for m.E.thylated/.E.pigenetic C
+        column[5] = 'C'
+        types = [str, np.int64, np.int64, np.int32, np.int32]
+        dtype = dict(zip(column.values(), types))
+        alphabet = ['E', 'C']
+        coordinate = [column[i] for i in range(3)]
+
+    contig_sup = contig_supremum(filenames, args.contig)
+
+    nsites_sup = nsites_supremum(filenames, args.contig) # maybe use 'tee' in a single function to query with tabix only once
+
+    chunksize = math.ceil(contig_sup/nsites_sup * COVERAGE)
+
+    grid = zip(range(1, contig_sup, chunksize),
+               range(1 + chunksize, contig_sup + chunksize, chunksize))
+
+    #with open(args.output, 'a') as outfile:
+        #trackline = 'track type=bedGraph\n'
+        #outfile.write(trackline)
+
+    outfile = args.output
+
+    for interval in grid:
+
+        ### read input
+
+        region = args.contig + ':{0}-{1}'.format(*interval)
+
+        tabix_query = (subprocess.Popen(['tabix', f, region], stdout=subprocess.PIPE, universal_newlines=True)
+                           for f in filenames)
+
+        dataframes = (pd.read_table(query.stdout, skiprows=1, header=None,
+                                    usecols=list(column.keys()),
+                                    names=list(column.values()), dtype=dtype,
+                                    index_col=[0, 1, 2])
+                      for query in tabix_query)
+
+        indata = pd.concat(dataframes, axis=1, keys=labels)
+
+        if indata.empty:
+            continue
+        ### process data
+
+        # impute_value = impute(indata, method='pseudocount')
+        # indata.fillna(impute_value, inplace=True)
+
+        diversity_stats = group_statistics(indata)
+
+        ### write output
+
+        outdata = pd.DataFrame(diversity_stats, index=indata.index)
+
+        if not os.path.isfile(outfile):
+            # write to csv with header
+            outdata.to_csv(outfile, sep='\t', index=True, header=True, mode='a')
+        else:
+            outdata.to_csv(outfile, sep='\t', index=True, header=False, mode='a')
+
+    pass
+
+if __name__ == '__main__':
+    shannon()

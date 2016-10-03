@@ -1,0 +1,496 @@
+commit 562d035d154b100fc1ce10dac071e9a1fd89c45f
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Mon Aug 22 02:09:57 2016 +0200
+
+    NEW FUNCTION: group_statistics() and entropy() with method 'mle'
+    
+    Problem: compute relevant and useful diversity statistics for within-group
+    such that this allows to use the output easily for between-group JSD
+    
+    Solution: using dataframe values as numpy array and performing all relevant
+    calculations in the function group statistics. For that, the following changes
+    have been made:
+    - entropy() takes now counts and a method argument; for now only MLE estimate
+    - appending to output has been simplified, omitting the with statement
+
+commit 388a87da764b0f7e84a3e21f4d32c8fa20f9d02f
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Thu Aug 18 00:04:10 2016 +0200
+
+    NEW FUNCTION: impute() for missing value imputation
+    
+    Problem: NaN for positions where a sample has zero coverage
+    
+    Solution: a function that returns the value to be used in the pandas.DataFrame method fillna()
+    
+    Implementation: At the moment, impute() returns the value 1, which is termed
+    'pseudocount' method; this is, at the same time, the expected posterior
+    probability of methylation and the expected posterior predictive assuming a flat
+    Dirichlet prior and a categorical likelihood function.
+    
+    TODO: We should record the number of NaNs before to know the real sample size at
+    each position
+
+commit 955adc5548027209e5d3ed87f89b447557c8189f
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Wed Aug 17 15:46:55 2016 +0200
+
+    NEW FUNCTION: legacy function for entropy.
+
+commit da651bce00766bd305f0dd9d1234a2c9a3b98e67
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Wed Aug 17 10:40:29 2016 +0200
+
+    Remove argument --output from shannon, superfluous for now
+
+commit 633d6b72830252046752c41c9eb81b2710d1d8e7
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Tue Aug 16 20:52:00 2016 +0200
+
+    NEW interface for metadata
+    
+    Problem: the metadata interface was broken
+    Solution: new function process_arguments
+              - process metadata, query, groupby with pandas
+              - modifies args.output to reflect contig, query, groupby
+
+commit b2924215b66b78335e5d1cb797f6a3d4d99fd5a8
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Tue Aug 9 18:09:45 2016 +0200
+
+    New way to calculate the region for querying
+    
+    only parameter: desired data coverage for the region
+    new function: nsites_supremum to calculate max number of sites covered
+    
+    some renaming/-factoring
+
+commit 556ae9df91d2a55d2c4968eb65bfb3a6d1f43503
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Tue Aug 9 15:06:36 2016 +0200
+
+    some minor comments added, renaming trackinfo to trackline
+
+commit fb1cf040022796c892262fb989c08bb598d507bc
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Mon Aug 8 23:52:11 2016 +0200
+
+    NEW Concat count data in chunks queried by tabix
+    
+    Problem: We could not ensure overlapping regions of bed files when querying only
+    by line.
+    
+    Idea: Use tabix to query data in regions and pipe the stdout to pandas.concat
+    
+    Solution: Implemented in read_data, additional commandline argument for contig,
+    subprocess.Popen as part of a generator that streams to pandas concat which also
+    takes a generator expression, output is appended much like in the notebook
+    human_oocyte...
+
+commit 50ac7d8fcc5fda81828b44196178b95570c59535
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Mon Aug 8 23:52:01 2016 +0200
+
+    NEW Snakefile with rules for generating tabix
+
+commit 1c5e800eee678f209e216bc202a0c352c6590d10
+Author: Oender Kartal <oender.kartal@mykolab.ch>
+Date:   Sun Aug 7 17:48:31 2016 +0200
+
+    function get_filenames()
+
+commit a66c1d4382a6c327a40ef273cd4e03735d203eae
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Tue Mar 22 17:19:41 2016 +0100
+
+    Add --version argument and improve help message for data input
+
+commit ce4c04e28cacbce8ac17a843261d30a84b89a0ec
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Tue Mar 22 15:25:48 2016 +0100
+
+    Add shell messages for chosen options
+    
+    - print error if --query but no --metadata is provided
+    - print note if no query provided
+
+commit ecc1013275b72fb2328d26a3db98908f28363a01
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Tue Mar 22 14:30:43 2016 +0100
+
+    Rename shannon.py to shannon
+    
+    additionally to run more conveniently:
+    - add shebang
+    - chmod +x
+
+commit 442d0200f173c5543a5d55d593eaec6f75f1ab69
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Tue Mar 22 12:35:49 2016 +0100
+
+    API change, 3 arguments only
+    
+    - data: the actual data
+    - metadata: csv file
+    - query: specifies the set on which the index is calculated
+      (includes selection of reference set and equ. relation)
+
+commit 7595f957961442919e9f3a08551423805409c8d6
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Fri Mar 11 22:02:42 2016 +0100
+
+    NEW: read_bedg function with pandas merge
+
+commit 360855376847c6f5e43a0101922ad34225212095
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Thu Mar 10 14:51:48 2016 +0100
+
+    Docs for function 'structure'
+
+commit 2eeb8d464830b14efe0b69221fa01d0ddd95683f
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Thu Mar 10 11:38:23 2016 +0100
+
+    Change function 'structure' and 'main'
+    
+    Why? I want the function structure to be callable on a pandas DataFrame,
+    so I moved the pd.read_table to the function 'main'. This allows to
+    import 'structure' in a Python session as a module and work directly on
+    a DataFrame. For consistency of usage from command line and REPL, I also
+    change the default values of the optional parameters in 'structure' to
+    zero (false). (Also change 'selection' to 'population' makes more
+    sense.)
+
+commit 8549e247dbc33f17d660d97ee6030d55db72b02d
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Thu Mar 10 10:51:39 2016 +0100
+
+    Change function 'structure'
+    
+    1. Add arguments to snif the delimiter when reading metadata into data
+    frame.
+    
+    2. Remove superfluous else clause when defining selection.
+    
+    3. Add print function to show selection and subdivision in stdout.
+
+commit e335d54886641df5b842a7141149c58cf32c0dcf
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Wed Mar 9 21:07:40 2016 +0100
+
+    New function to structure the population metadata
+    
+    The function takes the input metadata and uses pandas dataframe with
+    query and groupby to output a list of labels for the selection and a
+    series with the subdivision.
+commit 562d035d154b100fc1ce10dac071e9a1fd89c45f
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Mon Aug 22 02:09:57 2016 +0200
+
+    NEW FUNCTION: group_statistics() and entropy() with method 'mle'
+    
+    Problem: compute relevant and useful diversity statistics for within-group
+    such that this allows to use the output easily for between-group JSD
+    
+    Solution: using dataframe values as numpy array and performing all relevant
+    calculations in the function group statistics. For that, the following changes
+    have been made:
+    - entropy() takes now counts and a method argument; for now only MLE estimate
+    - appending to output has been simplified, omitting the with statement
+
+commit 388a87da764b0f7e84a3e21f4d32c8fa20f9d02f
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Thu Aug 18 00:04:10 2016 +0200
+
+    NEW FUNCTION: impute() for missing value imputation
+    
+    Problem: NaN for positions where a sample has zero coverage
+    
+    Solution: a function that returns the value to be used in the pandas.DataFrame method fillna()
+    
+    Implementation: At the moment, impute() returns the value 1, which is termed
+    'pseudocount' method; this is, at the same time, the expected posterior
+    probability of methylation and the expected posterior predictive assuming a flat
+    Dirichlet prior and a categorical likelihood function.
+    
+    TODO: We should record the number of NaNs before to know the real sample size at
+    each position
+
+commit 955adc5548027209e5d3ed87f89b447557c8189f
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Wed Aug 17 15:46:55 2016 +0200
+
+    NEW FUNCTION: legacy function for entropy.
+
+commit da651bce00766bd305f0dd9d1234a2c9a3b98e67
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Wed Aug 17 10:40:29 2016 +0200
+
+    Remove argument --output from shannon, superfluous for now
+
+commit 633d6b72830252046752c41c9eb81b2710d1d8e7
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Tue Aug 16 20:52:00 2016 +0200
+
+    NEW interface for metadata
+    
+    Problem: the metadata interface was broken
+    Solution: new function process_arguments
+              - process metadata, query, groupby with pandas
+              - modifies args.output to reflect contig, query, groupby
+
+commit b2924215b66b78335e5d1cb797f6a3d4d99fd5a8
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Tue Aug 9 18:09:45 2016 +0200
+
+    New way to calculate the region for querying
+    
+    only parameter: desired data coverage for the region
+    new function: nsites_supremum to calculate max number of sites covered
+    
+    some renaming/-factoring
+
+commit 556ae9df91d2a55d2c4968eb65bfb3a6d1f43503
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Tue Aug 9 15:06:36 2016 +0200
+
+    some minor comments added, renaming trackinfo to trackline
+
+commit fb1cf040022796c892262fb989c08bb598d507bc
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Mon Aug 8 23:52:11 2016 +0200
+
+    NEW Concat count data in chunks queried by tabix
+    
+    Problem: We could not ensure overlapping regions of bed files when querying only
+    by line.
+    
+    Idea: Use tabix to query data in regions and pipe the stdout to pandas.concat
+    
+    Solution: Implemented in read_data, additional commandline argument for contig,
+    subprocess.Popen as part of a generator that streams to pandas concat which also
+    takes a generator expression, output is appended much like in the notebook
+    human_oocyte...
+
+commit 50ac7d8fcc5fda81828b44196178b95570c59535
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Mon Aug 8 23:52:01 2016 +0200
+
+    NEW Snakefile with rules for generating tabix
+
+commit 1c5e800eee678f209e216bc202a0c352c6590d10
+Author: Oender Kartal <oender.kartal@mykolab.ch>
+Date:   Sun Aug 7 17:48:31 2016 +0200
+
+    function get_filenames()
+
+commit a66c1d4382a6c327a40ef273cd4e03735d203eae
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Tue Mar 22 17:19:41 2016 +0100
+
+    Add --version argument and improve help message for data input
+
+commit ce4c04e28cacbce8ac17a843261d30a84b89a0ec
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Tue Mar 22 15:25:48 2016 +0100
+
+    Add shell messages for chosen options
+    
+    - print error if --query but no --metadata is provided
+    - print note if no query provided
+
+commit ecc1013275b72fb2328d26a3db98908f28363a01
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Tue Mar 22 14:30:43 2016 +0100
+
+    Rename shannon.py to shannon
+    
+    additionally to run more conveniently:
+    - add shebang
+    - chmod +x
+
+commit 442d0200f173c5543a5d55d593eaec6f75f1ab69
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Tue Mar 22 12:35:49 2016 +0100
+
+    API change, 3 arguments only
+    
+    - data: the actual data
+    - metadata: csv file
+    - query: specifies the set on which the index is calculated
+      (includes selection of reference set and equ. relation)
+
+commit 7595f957961442919e9f3a08551423805409c8d6
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Fri Mar 11 22:02:42 2016 +0100
+
+    NEW: read_bedg function with pandas merge
+
+commit 360855376847c6f5e43a0101922ad34225212095
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Thu Mar 10 14:51:48 2016 +0100
+
+    Docs for function 'structure'
+
+commit 2eeb8d464830b14efe0b69221fa01d0ddd95683f
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Thu Mar 10 11:38:23 2016 +0100
+
+    Change function 'structure' and 'main'
+    
+    Why? I want the function structure to be callable on a pandas DataFrame,
+    so I moved the pd.read_table to the function 'main'. This allows to
+    import 'structure' in a Python session as a module and work directly on
+    a DataFrame. For consistency of usage from command line and REPL, I also
+    change the default values of the optional parameters in 'structure' to
+    zero (false). (Also change 'selection' to 'population' makes more
+    sense.)
+
+commit 8549e247dbc33f17d660d97ee6030d55db72b02d
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Thu Mar 10 10:51:39 2016 +0100
+
+    Change function 'structure'
+    
+    1. Add arguments to snif the delimiter when reading metadata into data
+    frame.
+    
+    2. Remove superfluous else clause when defining selection.
+    
+    3. Add print function to show selection and subdivision in stdout.
+
+commit e335d54886641df5b842a7141149c58cf32c0dcf
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Wed Mar 9 21:07:40 2016 +0100
+
+    New function to structure the population metadata
+    
+    The function takes the input metadata and uses pandas dataframe with
+    query and groupby to output a list of labels for the selection and a
+    series with the subdivision.
+commit 68e2f75f7c148067ef2007fff17e47e4bfc3f992
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Wed Feb 24 22:02:14 2016 +0100
+
+    Initial commit: Jensen-Shannon Divergence script
+    
+    The various scripts and IPython notebooks have to be reorganized into a
+    clean command-line script. The aim is to have a script that runs on a
+    set of bedgraph and vcf files and outputs a single bedgraph file.
+    
+    The input should be:
+    1. a data frame with a row for each sample with additional meta-data.
+    2. a query string to select a subpopulation (see paper).
+
+commit 1342ca46960d877d8d23975b9334fe4a59ca144a
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Fri May 22 19:17:52 2015 +0200
+
+    NEW Implementation of JSD for population structure
+
+commit e2d73c532a15f2bc7d1114ebae5738375d27664d
+Merge: 672b6fb 1c56b88
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Thu May 21 14:13:30 2015 +0200
+
+    Merge branch 'bedcount_reader' into function_jensen-shannon
+
+commit 1c56b88ea5585416eb9cb237736181ec5492a2ce
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Thu May 21 12:29:25 2015 +0200
+
+    CHANGE bedcount reader function
+    
+    Problem: Chromosome ID and 1-based start coordinate were read into the
+    data frame as index which makes subsequent manipulations cumbersome or
+    unnatural, e.g. data type changes or adding 0-based start and 1-based
+    end coordinates for bedgraph output.
+    
+    Done: Chromosome ID and start are read as data with respective data
+    type.
+
+commit 672b6fb27af5e26e693a20d4664196c681789a5c
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Thu May 21 12:03:06 2015 +0200
+
+    Gitignore
+    
+    Ignore ipython checkpoints and compiled python modules.
+
+commit 1065b185512fc144bcc63f2a7db28ef0f9c9b089
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Thu May 21 12:03:06 2015 +0200
+
+    Gitignore
+    
+    Ignore ipython checkpoints and compiled python modules.
+
+commit 06b083503cf975c17e5c198903a41434cb4c8256
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Thu May 21 11:55:41 2015 +0200
+
+    Add folder to hold test data
+
+commit c5410e57034fa7a505013281f87e1974ab00f3cb
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Mon May 11 10:52:47 2015 +0200
+
+    Change function population_filter
+    
+    PROBLEM: we need a single function that processes metadata only
+    
+    DONE: population_filter takes three arguments (metadata file, subset
+    query for reference population, relation) and outputs a dictionary with
+    a list of sample IDs of reference population and a list of lists for the
+    quotient set.
+
+commit 883a19b6ae6ce73dcfe43e458808c1244896739f
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Thu May 7 22:37:58 2015 +0200
+
+    New functions in diversity.io
+    
+    PROBLEM: we had no functions to read bedcount data in chunks and filter
+    this data according to a selection based on a metadata file
+    
+    DONE: add functions *bedcount_reader* and *population_filter*, tested on
+    test data in ipython
+    
+    TODO: write proper tests
+    
+    NEXT: for discrete case with count data, modify/make function for
+    calculating Jensen-Shannon Divergence
+    
+    jensen_shannon(counts, nstates=None, relation=None)
+        nsamples from nstates and axis=1 length
+        reshape count matrix
+        A = mixture entropy of the total population
+        if relation is None:
+            B = average entropy of the total population
+        else:
+            B = average *mixture* entropy of subgroups
+        return A - B
+
+commit 5917dcf4f0463df6a11e1502ab48039af7e81c44
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Thu May 7 10:58:53 2015 +0200
+
+    Refactor directory structure for IPython notebooks
+    
+    Put IPython notebooks into folder 'development' that should be used for
+    developing scripts and library functions.
+
+commit cb3429f271db44e773a123ccaefcc536d557f087
+Author: okartal <oender.kartal@mykolab.ch>
+Date:   Wed May 6 16:55:27 2015 +0200
+
+    Python package for nucleotide diversity
+    
+    This is a collection of scripts/functions I wrote previously to
+    calculate Jensen-Shannon Divergence from aligned BS-seq data. The
+    scripts were scattered in different places and this repository serves
+    mainly to reorganize and clean up the code and prepare for a package
+    with modules that can be easily distributed to other users. At this
+    point, most of the repository is just boilerplate but with some working
+    scripts which warrants a commit. During refactoring more precise
+    explanations will follow.
