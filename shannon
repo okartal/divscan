@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Wed Feb 24 14:33:09 2016
+"""shannon
 
-@author: oender
+This file collects functions and the command-line parser for the shannon
+program. shannon uses count data over genomic coordinates to calculate
+information-theoretic measures of diversity.
+
+Note: Eventually, functions that turn out to be reusable will become part of a
+module.
 """
+
+__author__ = 'Önder Kartal'
 
 import argparse
 import functools
@@ -26,26 +32,28 @@ def shannon():
     parser = argparse.ArgumentParser()
 
     parser.prog = 'shannon'
-
-    parser.description = '''A package for measuring population diversity based
-                            on Information Theory.'''
-
-    parser.add_argument('-v', '--version', action='version', version='%(prog)s 0.1.0')
+    parser.description = ('shannon: information-theory to quantify genomic'
+                          ' population diversity.')
+    parser.add_argument('-v', '--version', action='version',
+                        version='%(prog)s 0.1.0')
     parser.add_argument('-o', '--output', metavar='FILE')
     parser.add_argument('-m', '--metadata', metavar='PATH',
                         help='''
-                        A csv file that contains population metadata.
+                        A tab-separated text file that contains population
+                        metadata. Entries in a column named 'label' have to
+                        match the prefix of the input files.
                         ''')
     parser.add_argument('-q', '--query', metavar='"STR"', type=str,
                         help='''
-                        An expression in double quotes that defines the set on which the
-                        diversity index is calculated.
-                        Needs metadata and a path to a folder to locate the input files.
+                        Expression in double quotes that defines the set on
+                        which the diversity index is calculated. Is ignored when
+                        metadata is missing.
                         ''')
     parser.add_argument('-g', '--groupby', metavar='STR', nargs='+', type=str,
                         help='''
                         The variable or factor/relation according to which the
-                        queried set is partitioned. Needs metadata and a path to a folder to locate the input files..
+                        query set is partitioned. Is ignored when
+                        metadata is missing.
                         ''')
     parser.add_argument('contig', type=str,
                         help='''
@@ -53,8 +61,8 @@ def shannon():
                         ''')
     parser.add_argument('path', nargs='+',
                         help='''
-                        A list of filepaths or a pattern with wildcard that returns an appropriate list of
-                        files.
+                        A list of filepaths or a pattern with wildcard that
+                        returns an appropriate list of files.
                         ''')
 
     process_arguments(args=parser.parse_args())
@@ -62,6 +70,8 @@ def shannon():
     pass
 
 def process_arguments(args=None):
+    '''Process command-line input.
+    '''
 
     suffix = "div"
 
@@ -172,23 +182,29 @@ def get_filenames(file_input, metadata=None):
     return filenames
 
 def contig_supremum(tabixfiles, contig):
-    '''Get the least upper bound on chromEnd for the set of files.
+    '''Return the maximum base position covered across all samples.
     '''
-    chromEnd = list()
+
+    base_position = list()
+
     for f in tabixfiles:
         p1 = subprocess.Popen(["tabix", f, contig], stdout=subprocess.PIPE)
-        p2 = subprocess.Popen(["tail", "-1"], stdin=p1.stdout, stdout=subprocess.PIPE)
-        p3 = subprocess.Popen(["cut", "-f3"], stdin=p2.stdout, stdout=subprocess.PIPE)
+        p2 = subprocess.Popen(["tail", "-1"], stdin=p1.stdout,
+                              stdout=subprocess.PIPE)
+        p3 = subprocess.Popen(["cut", "-f3"], stdin=p2.stdout,
+                              stdout=subprocess.PIPE)
         p1.stdout.close()  # Allow p1 to receive a SIGPIPE if p2 exits.
-        output = int(p3.communicate()[0])
-        chromEnd.append(output)
+        chromEnd = int(p3.communicate()[0])
+        base_position.append(chromEnd)
 
-    return np.max(chromEnd)
+    return np.max(base_position)
 
 def nsites_supremum(tabixfiles, contig):
-    '''Get the least upper bound on chromEnd for the set of files.
+    '''Return the maximum number of sites covered across all samples.
     '''
+
     sites_covered = list()
+
     for f in tabixfiles:
         p1 = subprocess.Popen(["tabix", f, contig], stdout=subprocess.PIPE)
         p2 = subprocess.Popen(["wc", "-l"], stdin=p1.stdout, stdout=subprocess.PIPE)
@@ -286,7 +302,8 @@ def process_data(filenames, labels=None, args=None, filetype='bismark_coverage')
 
     contig_sup = contig_supremum(filenames, args.contig)
 
-    nsites_sup = nsites_supremum(filenames, args.contig) # maybe use 'tee' in a single function to query with tabix only once
+    # maybe use 'tee' in a single function to query with tabix only once
+    nsites_sup = nsites_supremum(filenames, args.contig)
 
     chunksize = math.ceil(contig_sup/nsites_sup * COVERAGE)
 
@@ -305,8 +322,10 @@ def process_data(filenames, labels=None, args=None, filetype='bismark_coverage')
 
         region = args.contig + ':{0}-{1}'.format(*interval)
 
-        tabix_query = (subprocess.Popen(['tabix', f, region], stdout=subprocess.PIPE, universal_newlines=True)
-                           for f in filenames)
+        tabix_query = (subprocess.Popen(['tabix', f, region],
+                                        stdout=subprocess.PIPE,
+                                        universal_newlines=True)
+                       for f in filenames)
 
         dataframes = (pd.read_table(query.stdout, skiprows=1, header=None,
                                     usecols=list(column.keys()),
