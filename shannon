@@ -37,7 +37,7 @@ def shannon():
     parser.add_argument('-v', '--version', action='version',
                         version='%(prog)s 0.1.0')
     parser.add_argument('-o', '--output', metavar='FILE')
-    parser.add_argument('-m', '--metadata', metavar='PATH',
+    parser.add_argument('-m', '--metadata', metavar='FILE',
                         help='''
                         A tab-separated text file that contains population
                         metadata. Entries in a column named 'label' have to
@@ -55,25 +55,27 @@ def shannon():
                         query set is partitioned. Is ignored when
                         metadata is missing.
                         ''')
-    parser.add_argument('contig', type=str,
+    parser.add_argument('-c', '--contig', required=True, type=str,
                         help='''
                         Contig ID for which computations are done.
                         ''')
-    parser.add_argument('path', nargs='+',
+    parser.add_argument('-i', '--input', required=True, nargs='+',
                         help='''
                         A list of filepaths or a pattern with wildcard that
                         returns an appropriate list of files.
                         ''')
 
     process_arguments(args=parser.parse_args())
-
+    
     pass
 
 def process_arguments(args=None):
     '''Process command-line input.
     '''
 
-    suffix = "div"
+    print('processing...')
+    
+    suffix = "bed"
 
     if not args.output:
         # give it a default generic name
@@ -81,59 +83,46 @@ def process_arguments(args=None):
 
     # TODO: use path module to properly handle path objects instead of string-fu
     if not args.metadata:
-
         if (args.query or args.groupby):
             print('[INPUT ERROR]')
             print('Please supply --metadata if you want to use --query and/or --groupby!')
             sys.exit()
         else:
-            filenames = get_filenames(args.path)
+            filenames = get_filenames(args.input)
             labels = [f.split('.')[0] for f in filenames]
-            process_data(filenames, labels, args)
-
+            process_data(filenames, labels=labels, args=args)
     else:
-
         meta = pd.read_table(args.metadata, header=0)
-        files = get_filenames(args.path)
-
+        files = get_filenames(args.input)
         if args.query and not args.groupby:
             queryset = meta.query(args.query)
             labels = queryset["label"]
             filenames = [name for name in files if any(name.find(label) != -1 for label in labels)]
             args.output = ".".join([args.contig, args.query, suffix]).replace("==", "_").replace("'", "")
-            process_data(filenames, queryset["label"], args)
+            process_data(filenames, labels=queryset["label"], args=args)
             print('[QUERY DATA]')
             print("\n".join(filenames))
             print('[OUTPUT FILE]')
             print(args.output)
-
         if args.groupby:
-
             if not args.query:
                 quotientset = meta.groupby(args.groupby)
             else:
                 quotientset = meta.query(args.query).groupby(args.groupby)
 
             for key, group in quotientset:
-
                 labels = group["label"]
-
                 filenames = [name for name in files if any(name.find(label) != -1 for label in labels) and name.endswith('.gz')]
-
                 if type(key) is not tuple:
                     key = (str(key), )
                 else:
                     key = tuple(str(el) for el in key)
-
                 groups = list(zip(args.groupby, key))
-
                 groupby = "^".join(["_".join(g) for g in groups])
-
                 if args.query:
                     args.output = ".".join([args.contig, args.query, groupby, suffix])
                 else:
                     args.output = ".".join([args.contig, groupby, suffix])
-
                 args.output = args.output.replace("==", "_").replace("'", "")
 
                 process_data(filenames, labels=labels, args=args)
@@ -182,37 +171,35 @@ def get_filenames(file_input, metadata=None):
     return filenames
 
 def contig_supremum(tabixfiles, contig):
-    '''Return the maximum base position covered across all samples.
-    '''
+    """Return the least upper bound for the contig end coordinate.
+    """
 
-    base_position = list()
+    end_coordinate = list()
 
     for f in tabixfiles:
-        p1 = subprocess.Popen(["tabix", f, contig], stdout=subprocess.PIPE)
-        p2 = subprocess.Popen(["tail", "-1"], stdin=p1.stdout,
-                              stdout=subprocess.PIPE)
-        p3 = subprocess.Popen(["cut", "-f3"], stdin=p2.stdout,
-                              stdout=subprocess.PIPE)
-        p1.stdout.close()  # Allow p1 to receive a SIGPIPE if p2 exits.
-        chromEnd = int(p3.communicate()[0])
-        base_position.append(chromEnd)
+        tabix = subprocess.Popen(["tabix", f, contig], stdout=subprocess.PIPE)
+        tail = subprocess.Popen(["tail", "-1"], stdin=tabix.stdout, stdout=subprocess.PIPE)
+        cut = subprocess.Popen(["cut", "-f3"], stdin=tail.stdout, stdout=subprocess.PIPE)
+        tabix.stdout.close()  # Allow first process to receive a SIGPIPE if process 2 exits.
+        base_position = int(cut.communicate()[0])
+        end_coordinate.append(base_position)
 
-    return np.max(base_position)
+    return np.max(end_coordinate)
 
 def nsites_supremum(tabixfiles, contig):
-    '''Return the maximum number of sites covered across all samples.
+    '''Return the least upper bound for the number of covered sites.
     '''
 
-    sites_covered = list()
+    sites = list()
 
     for f in tabixfiles:
-        p1 = subprocess.Popen(["tabix", f, contig], stdout=subprocess.PIPE)
-        p2 = subprocess.Popen(["wc", "-l"], stdin=p1.stdout, stdout=subprocess.PIPE)
-        p1.stdout.close()  # Allow p1 to receive a SIGPIPE if p2 exits.
-        output = int(p2.communicate()[0])
-        sites_covered.append(output)
+        tabix = subprocess.Popen(["tabix", f, contig], stdout=subprocess.PIPE)
+        wcl = subprocess.Popen(["wc", "-l"], stdin=tabix.stdout, stdout=subprocess.PIPE)
+        tabix.stdout.close()  # Allow tabix to receive a SIGPIPE if wcl exits.
+        site_count = int(wcl.communicate()[0])
+        sites.append(site_count)
 
-    return np.max(sites_covered)
+    return np.max(sites)
 
 def entropy(counts, axis=1, method='mle'):
     """Entropy of probability mass functions.
@@ -239,14 +226,41 @@ def impute(data, method='pseudocount'):
     return value
 
 def group_statistics(data):
+    """Returns statistics for JS divergence.
 
+    This functions uses numpy to return the within-group
+    JS-divergence. Some other statistics are calculated to assess
+    uncertainty as well as between-group divergence for a future
+    function if a second file is given.
+
+    Arguments
+    ---------
+
+    data : pandas DataFrame
+
+    Returns 
+    -------
+
+    stats : dictionary with statistics for each position
+
+    - sample size : number of samples with coverage > 0
+    - E : number of methylated C base counts over all samples
+    - C : number of unmethylated C base counts over all samples
+    - average methylation : weighted average methylation level over all samples
+    - mixture entropy : entropy of the mixture distribution
+    - JS divergence : mixture entropy - weighted average entropy of all distributions
+
+    """
+
+    DECIMALS = 5
+    
+    stats = dict()
+    
     # input
 
     samples = data.columns.levels[0]
     alphabet = data.columns.levels[1]
     counts = data.values.reshape(-1, len(samples), len(alphabet))
-
-    stats = dict()
 
     # some necessary calculations
 
@@ -257,17 +271,20 @@ def group_statistics(data):
 
     # assignments
 
-    stats['sample_size'] = np.sum(np.all(~np.isnan(counts), axis=2), axis=1)
+    stats['sample size'] = np.sum(np.all(~np.isnan(counts), axis=2), axis=1)
 
     for ix, base in enumerate(alphabet):
         # assuming that order of bases is the same in alphabet and subarray
-        stats['sum' + base] = np.uint(sum_alphabet[:, ix])
+        stats[base] = np.uint(sum_alphabet[:, ix])
 
-    stats['wavgMeth'] = stats['sumE'] / (stats['sumE'] + stats['sumC'])
+    total_count = stats['E'] + stats['C']
+    average_entropy = np.average(entropy_sample, weights=weight_sample, axis=1)
 
-    stats['mixH'] = entropy(sum_alphabet)
+    stats['average methylation'] = np.round(stats['E']/total_count, DECIMALS)
 
-    stats['jsd'] = stats['mixH'] - np.average(entropy_sample, weights=weight_sample, axis=1)
+    stats['mixture entropy'] = np.round(entropy(sum_alphabet), DECIMALS)
+
+    stats['JS divergence'] = np.round(stats['mixture entropy'] - average_entropy, 4)
 
     return stats
 
@@ -284,28 +301,29 @@ def process_data(filenames, labels=None, args=None, filetype='bismark_coverage')
     -----
 
     '''
-    # the number of desired data points per region
-    COVERAGE = 1e4
+
+    imputation = False
+
+    outfile = args.output
 
     column = collections.OrderedDict()
 
     if filetype == 'bismark_coverage':
         column[0] = '#chrom'
-        column[1] = 'chromStart'
-        column[2] = 'chromEnd'
-        column[4] = 'E' # my nucleotide code for m.E.thylated/.E.pigenetic C
+        column[1] = 'start'
+        column[2] = 'end'
+        column[4] = 'E' # my single letter code for methylated C
         column[5] = 'C'
         types = [str, np.int64, np.int64, np.int32, np.int32]
         dtype = dict(zip(column.values(), types))
         alphabet = ['E', 'C']
         coordinate = [column[i] for i in range(3)]
 
+    SIZE = 1e5
+    
     contig_sup = contig_supremum(filenames, args.contig)
-
-    # maybe use 'tee' in a single function to query with tabix only once
     nsites_sup = nsites_supremum(filenames, args.contig)
-
-    chunksize = math.ceil(contig_sup/nsites_sup * COVERAGE)
+    chunksize = math.ceil(contig_sup/nsites_sup * SIZE)
 
     grid = zip(range(1, contig_sup, chunksize),
                range(1 + chunksize, contig_sup + chunksize, chunksize))
@@ -314,11 +332,9 @@ def process_data(filenames, labels=None, args=None, filetype='bismark_coverage')
         #trackline = 'track type=bedGraph\n'
         #outfile.write(trackline)
 
-    outfile = args.output
-
     for interval in grid:
 
-        ### read input
+        ### input ###
 
         region = args.contig + ':{0}-{1}'.format(*interval)
 
@@ -335,24 +351,26 @@ def process_data(filenames, labels=None, args=None, filetype='bismark_coverage')
 
         indata = pd.concat(dataframes, axis=1, keys=labels)
 
+        ### process ###
+        
         if indata.empty:
             continue
-        ### process data
 
-        # impute_value = impute(indata, method='pseudocount')
-        # indata.fillna(impute_value, inplace=True)
+        if imputation:
+            impute_value = impute(indata, method='pseudocount')
+            indata.fillna(impute_value, inplace=True)
 
-        diversity_stats = group_statistics(indata)
+        jsd_stats = group_statistics(indata)
 
-        ### write output
+        ### output ###
 
-        outdata = pd.DataFrame(diversity_stats, index=indata.index)
+        outdata = pd.DataFrame(jsd_stats, index=indata.index)
 
         if not os.path.isfile(outfile):
             # write to csv with header
-            outdata.to_csv(outfile, sep='\t', index=True, header=True, mode='a')
+            outdata.to_csv(outfile, header=True, sep='\t', index=True, mode='a')
         else:
-            outdata.to_csv(outfile, sep='\t', index=True, header=False, mode='a')
+            outdata.to_csv(outfile, header=False, sep='\t', index=True, mode='a')
 
     pass
 
