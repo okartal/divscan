@@ -13,17 +13,29 @@ module.
 __author__ = 'Önder Kartal'
 
 import argparse
+import collections
 import functools
 import glob
-from itertools import compress
-import numpy as np
-import os
-import pandas as pd
-import sys
-import collections
-import subprocess
 import math
-import numexpr as ne
+import os
+import subprocess
+import sys
+from urllib.parse import urlparse
+
+try:
+    import numpy as np
+except ImportError:
+    print("numpy is missing!")
+
+try:
+    import pandas as pd
+except ImportError:
+    print("pandas is missing!")
+
+try:
+    import numexpr as ne
+except ImportError:
+    print("numexpr is missing!")
 
 def shannon():
     '''Command line interface for shannon script.
@@ -34,6 +46,17 @@ def shannon():
     parser.prog = 'shannon'
     parser.description = ('shannon: information-theory to quantify genomic'
                           ' population diversity.')
+
+
+    parser.add_argument('-c', '--contig', required=True, type=str,
+                        help='''
+                        Contig ID for which computations are done.
+                        ''')
+    parser.add_argument('-i', '--input', required=True, nargs='+',
+                        help='''
+                        A list of filepaths or a pattern with wildcard that
+                        returns an appropriate list of files.
+                        ''')
     parser.add_argument('-v', '--version', action='version',
                         version='%(prog)s 0.1.0')
     parser.add_argument('-o', '--output', metavar='FILE')
@@ -54,15 +77,6 @@ def shannon():
                         The variable or factor/relation according to which the
                         query set is partitioned. Is ignored when
                         metadata is missing.
-                        ''')
-    parser.add_argument('-c', '--contig', required=True, type=str,
-                        help='''
-                        Contig ID for which computations are done.
-                        ''')
-    parser.add_argument('-i', '--input', required=True, nargs='+',
-                        help='''
-                        A list of filepaths or a pattern with wildcard that
-                        returns an appropriate list of files.
                         ''')
 
     process_arguments(args=parser.parse_args())
@@ -91,9 +105,9 @@ def process_arguments(args=None):
             filenames = get_filenames(args.input)
             labels = [f.split('.')[0] for f in filenames]
             process_data(filenames, labels=labels, args=args)
-    else:
+    elif args.metadata:
         meta = pd.read_table(args.metadata, header=0)
-        files = get_filenames(args.input)
+        files = get_filenames(args.input) # make input mutually exclusive with args.metadata
         if args.query and not args.groupby:
             queryset = meta.query(args.query)
             labels = queryset["label"]
