@@ -11,6 +11,7 @@ module.
 """
 
 __author__ = 'Önder Kartal'
+__version__ = "0.1.1"
 
 import argparse
 import collections
@@ -44,43 +45,48 @@ def shannon():
     parser = argparse.ArgumentParser()
 
     parser.prog = 'shannon'
-    parser.description = ('shannon: information-theory to quantify genomic'
-                          ' population diversity.')
 
+    parser.description = ('%(prog)s: a program to measure population diversity'
+                          ' using information-theory.')
+
+    parser.add_argument('-v', '--version', action='version',
+                        version='%(prog)s {0}'.format(__version__))
 
     parser.add_argument('-c', '--contig', required=True, type=str,
                         help='''
-                        Contig ID for which computations are done.
-                        ''')
-    parser.add_argument('-i', '--input', required=True, nargs='+',
-                        help='''
-                        A list of filepaths or a pattern with wildcard that
-                        returns an appropriate list of files.
-                        ''')
-    parser.add_argument('-v', '--version', action='version',
-                        version='%(prog)s 0.1.0')
-    parser.add_argument('-o', '--output', metavar='FILE')
-    parser.add_argument('-m', '--metadata', metavar='FILE',
-                        help='''
-                        A tab-separated text file that contains population
-                        metadata. Entries in a column named 'label' have to
-                        match the prefix of the input files.
-                        ''')
-    parser.add_argument('-q', '--query', metavar='"STR"', type=str,
-                        help='''
-                        Expression in double quotes that defines the set on
-                        which the diversity index is calculated. Is ignored when
-                        metadata is missing.
-                        ''')
-    parser.add_argument('-g', '--groupby', metavar='STR', nargs='+', type=str,
-                        help='''
-                        The variable or factor/relation according to which the
-                        query set is partitioned. Is ignored when
-                        metadata is missing.
+                        Name of contig for which computations are done.
                         ''')
 
-    process_arguments(args=parser.parse_args())
-    
+    parser.add_argument('-i', '--input', metavar="FILE", required=True,
+                        help='''
+                        A tab-separated table with metadata for each
+                        sample/record. Lines starting with # are ignored. The
+                        first line is interpreted as the header. The columns
+                        "url" and "label" are mandatory and the corresponding
+                        fields have to be non-empty for each sample.
+                        ''')
+
+    parser.add_argument('-q', '--query', metavar='"STR"', type=str,
+                        help='''
+                        Query expression to select a subset of samples. The
+                        expression has to be in double quotes. Examples: "tissue ==
+                        'leaf'", "age >= 32".
+                        ''')
+
+    parser.add_argument('-g', '--groupby', metavar='STR', nargs='+', type=str,
+                        help='''
+                        The factor according to which the selected set is
+                        partitioned. Has to match column names in the input
+                        metadata. One or more factors can be given.
+                        ''')
+
+    parser.add_argument('-o', '--output', metavar='FILE',
+                        help='Name of the output file.')
+
+    args = parser.parse_args()
+
+    process_arguments(args.contig, args.input, args.query, args.groupby, args.output)
+
     pass
 
 def process_arguments(args=None):
@@ -88,7 +94,7 @@ def process_arguments(args=None):
     '''
 
     print('processing...')
-    
+
     suffix = "bed"
 
     if not args.output:
@@ -252,7 +258,7 @@ def group_statistics(data):
 
     data : pandas DataFrame
 
-    Returns 
+    Returns
     -------
 
     stats : dictionary with statistics for each position
@@ -267,9 +273,9 @@ def group_statistics(data):
     """
 
     DECIMALS = 5
-    
+
     stats = dict()
-    
+
     # input
 
     samples = data.columns.levels[0]
@@ -334,7 +340,7 @@ def process_data(filenames, labels=None, args=None, filetype='bismark_coverage')
         coordinate = [column[i] for i in range(3)]
 
     SIZE = 1e5
-    
+
     contig_sup = contig_supremum(filenames, args.contig)
     nsites_sup = nsites_supremum(filenames, args.contig)
     chunksize = math.ceil(contig_sup/nsites_sup * SIZE)
@@ -366,7 +372,7 @@ def process_data(filenames, labels=None, args=None, filetype='bismark_coverage')
         indata = pd.concat(dataframes, axis=1, keys=labels)
 
         ### process ###
-        
+
         if indata.empty:
             continue
 
