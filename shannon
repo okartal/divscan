@@ -38,54 +38,38 @@ try:
 except ImportError:
     print("numexpr is missing!")
 
-def shannon():
-    '''Command line interface for shannon script.
-    '''
+def main(infile=None, contig=None, query=None, groupby=None, outfile=None):
+    """Process the arguments
+    """
 
-    parser = argparse.ArgumentParser()
+    groups = None
+    suffix = 'bed'
 
-    parser.prog = 'shannon'
+    metafile = urlparse(infile)
 
-    parser.description = ('%(prog)s: a program to measure population diversity'
-                          ' using information-theory.')
+    try:
+        metadata = pd.read_csv(metafile.path, comment='#', sep='\t', header=0)
+    except FileNotFoundError as e:
+        print(e)
+        sys.exit(1)
 
-    parser.add_argument('-v', '--version', action='version',
-                        version='%(prog)s {0}'.format(__version__))
+    if query:
+        metadata.query(query, inplace=True)
+    if groupby:
+        groups = metadata.groupby(groupby)
 
-    parser.add_argument('-c', '--contig', required=True, type=str,
-                        help='''
-                        Name of contig for which computations are done.
-                        ''')
-
-    parser.add_argument('-i', '--input', metavar="FILE", required=True,
-                        help='''
-                        A tab-separated table with metadata for each
-                        sample/record. Lines starting with # are ignored. The
-                        first line is interpreted as the header. The columns
-                        "url" and "label" are mandatory and the corresponding
-                        fields have to be non-empty for each sample.
-                        ''')
-
-    parser.add_argument('-q', '--query', metavar='"STR"', type=str,
-                        help='''
-                        Query expression to select a subset of samples. The
-                        expression has to be in double quotes. Examples: "tissue ==
-                        'leaf'", "age >= 32".
-                        ''')
-
-    parser.add_argument('-g', '--groupby', metavar='STR', nargs='+', type=str,
-                        help='''
-                        The factor according to which the selected set is
-                        partitioned. Has to match column names in the input
-                        metadata. One or more factors can be given.
-                        ''')
-
-    parser.add_argument('-o', '--output', metavar='FILE',
-                        help='Name of the output file.')
-
-    args = parser.parse_args()
-
-    process_arguments(args.contig, args.input, args.query, args.groupby, args.output)
+    if groups:
+        for key, group in groups:
+            paths = [urlparse(url) for url in group['url']]
+            filenames = [p.path for p in paths]
+            labels = group['label']
+            # outfile =
+            process_data(filenames, labels, contig, outfile)
+    else:
+        paths = [urlparse(url) for url in metadata['url']]
+        filenames = [p.path for p in paths]
+        labels = metadata['label']
+        process_data(filenames, labels, contig, outfile)
 
     pass
 
@@ -308,7 +292,7 @@ def group_statistics(data):
 
     return stats
 
-def process_data(filenames, labels=None, args=None, filetype='bismark_coverage'):
+def process_data(filenames, labels=None, contig=None, outfile=None, filetype='bismark_coverage'):
     '''Combine input data to read count information.
 
     Parameters
@@ -323,8 +307,6 @@ def process_data(filenames, labels=None, args=None, filetype='bismark_coverage')
     '''
 
     imputation = False
-
-    outfile = args.output
 
     column = collections.OrderedDict()
 
@@ -341,8 +323,8 @@ def process_data(filenames, labels=None, args=None, filetype='bismark_coverage')
 
     SIZE = 1e5
 
-    contig_sup = contig_supremum(filenames, args.contig)
-    nsites_sup = nsites_supremum(filenames, args.contig)
+    contig_sup = contig_supremum(filenames, contig)
+    nsites_sup = nsites_supremum(filenames, contig)
     chunksize = math.ceil(contig_sup/nsites_sup * SIZE)
 
     grid = zip(range(1, contig_sup, chunksize),
@@ -356,7 +338,7 @@ def process_data(filenames, labels=None, args=None, filetype='bismark_coverage')
 
         ### input ###
 
-        region = args.contig + ':{0}-{1}'.format(*interval)
+        region = contig + ':{0}-{1}'.format(*interval)
 
         tabix_query = (subprocess.Popen(['tabix', f, region],
                                         stdout=subprocess.PIPE,
@@ -395,4 +377,48 @@ def process_data(filenames, labels=None, args=None, filetype='bismark_coverage')
     pass
 
 if __name__ == '__main__':
-    shannon()
+
+    parser = argparse.ArgumentParser()
+
+    parser.prog = 'shannon'
+
+    parser.description = ('%(prog)s: a program to measure population diversity'
+                          ' using information-theory.')
+
+    parser.add_argument('-v', '--version', action='version',
+                        version='%(prog)s {0}'.format(__version__))
+
+    parser.add_argument('-c', '--contig', required=True, type=str,
+                        help='''
+                        Name of contig for which computations are done.
+                        ''')
+
+    parser.add_argument('-i', '--input', metavar="URL", required=True,
+                        help='''
+                        A tab-separated table with metadata for each
+                        sample/record. Lines starting with # are ignored. The
+                        first line is interpreted as the header. The columns
+                        "url" and "label" are mandatory and the corresponding
+                        fields have to be non-empty for each sample.
+                        ''')
+
+    parser.add_argument('-q', '--query', metavar='"STR"', type=str,
+                        help='''
+                        Query expression to select a subset of samples. The
+                        expression has to be in double quotes. Examples: "tissue ==
+                        'leaf'", "age >= 32".
+                        ''')
+
+    parser.add_argument('-g', '--groupby', metavar='STR', nargs='+', type=str,
+                        help='''
+                        The factor according to which the selected set is
+                        partitioned. Has to match column names in the input
+                        metadata. One or more factors can be given.
+                        ''')
+
+    parser.add_argument('-o', '--output', metavar='FILE',
+                        help='Name of the output file.')
+
+    args = parser.parse_args()
+
+    main(args.input, args.contig, args.query, args.groupby, args.output)
