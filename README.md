@@ -1,28 +1,35 @@
 # shannon - Genome Analysis using Information Theory
 
-## Testing
+## Requirements
 
-1. Create conda environment and activate it.
+* conda
+* git
 
-   ```shell
-   $ conda create --name <env-name> --file requirements.txt
-   ```
+## Installation
 
-2. Make sure shannon and tests/test.sh are executable
-
-   ```shell
-   $ chmod u+x shannon
-   ```
-
-3. Make sure shannon is in your path. My preferred approach is to create a symlink in /usr/local/bin to the shannon script in the repository.
-
+1. Clone repository
+2. Make shannon and test.sh executable
+    ```shell
+    $ chmod +x shannon
+    $ chmod +x tests/test.sh
+    ```
+3. Put shannon in your path. Example:
    ```shell
    $ cd <path-to-bin>
    $ ln -s <path-to-shannon> # use sudo depending on <path-to-bin>
    ```
+4. Create conda environment
+   ```shell
+   $ conda create --name <env-name> --file requirements.txt
+   ```
 
-4. Test
+## Testing
 
+1. Activate environment
+   ```shell
+   $ source activate <env-name>
+   ```
+2. Run test
    ```shell
    $ cd tests
    $ ./test.sh
