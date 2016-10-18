@@ -38,7 +38,7 @@ try:
 except ImportError:
     print("numexpr is missing!")
 
-def main(infile=None, contig=None, query=None, groupby=None, outfile=None):
+def main(infile=None, chrom=None, query=None, groupby=None, outfile=None):
     """Process the arguments
     """
 
@@ -64,12 +64,12 @@ def main(infile=None, contig=None, query=None, groupby=None, outfile=None):
             filenames = [p.path for p in paths]
             labels = group['label']
             # outfile =
-            process_data(filenames, labels, contig, outfile)
+            process_data(filenames, labels, chrom, outfile)
     else:
         paths = [urlparse(url) for url in metadata['url']]
         filenames = [p.path for p in paths]
         labels = metadata['label']
-        process_data(filenames, labels, contig, outfile)
+        process_data(filenames, labels, chrom, outfile)
 
     pass
 
@@ -83,7 +83,7 @@ def process_arguments(args=None):
 
     if not args.output:
         # give it a default generic name
-        args.output = ".".join([args.contig, suffix])
+        args.output = ".".join([args.chrom, suffix])
 
     # TODO: use path module to properly handle path objects instead of string-fu
     if not args.metadata:
@@ -102,7 +102,7 @@ def process_arguments(args=None):
             queryset = meta.query(args.query)
             labels = queryset["label"]
             filenames = [name for name in files if any(name.find(label) != -1 for label in labels)]
-            args.output = ".".join([args.contig, args.query, suffix]).replace("==", "_").replace("'", "")
+            args.output = ".".join([args.chrom, args.query, suffix]).replace("==", "_").replace("'", "")
             process_data(filenames, labels=queryset["label"], args=args)
             print('[QUERY DATA]')
             print("\n".join(filenames))
@@ -124,9 +124,9 @@ def process_arguments(args=None):
                 groups = list(zip(args.groupby, key))
                 groupby = "^".join(["_".join(g) for g in groups])
                 if args.query:
-                    args.output = ".".join([args.contig, args.query, groupby, suffix])
+                    args.output = ".".join([args.chrom, args.query, groupby, suffix])
                 else:
-                    args.output = ".".join([args.contig, groupby, suffix])
+                    args.output = ".".join([args.chrom, groupby, suffix])
                 args.output = args.output.replace("==", "_").replace("'", "")
 
                 process_data(filenames, labels=labels, args=args)
@@ -174,14 +174,14 @@ def get_filenames(file_input, metadata=None):
 
     return filenames
 
-def contig_supremum(tabixfiles, contig):
-    """Return the least upper bound for the contig end coordinate.
+def chrom_supremum(tabixfiles, chrom):
+    """Return the least upper bound for the chrom end coordinate.
     """
 
     end_coordinate = list()
 
     for f in tabixfiles:
-        tabix = subprocess.Popen(["tabix", f, contig], stdout=subprocess.PIPE)
+        tabix = subprocess.Popen(["tabix", f, chrom], stdout=subprocess.PIPE)
         tail = subprocess.Popen(["tail", "-1"], stdin=tabix.stdout, stdout=subprocess.PIPE)
         cut = subprocess.Popen(["cut", "-f3"], stdin=tail.stdout, stdout=subprocess.PIPE)
         tabix.stdout.close()  # Allow first process to receive a SIGPIPE if process 2 exits.
@@ -190,14 +190,14 @@ def contig_supremum(tabixfiles, contig):
 
     return np.max(end_coordinate)
 
-def nsites_supremum(tabixfiles, contig):
+def nsites_supremum(tabixfiles, chrom):
     '''Return the least upper bound for the number of covered sites.
     '''
 
     sites = list()
 
     for f in tabixfiles:
-        tabix = subprocess.Popen(["tabix", f, contig], stdout=subprocess.PIPE)
+        tabix = subprocess.Popen(["tabix", f, chrom], stdout=subprocess.PIPE)
         wcl = subprocess.Popen(["wc", "-l"], stdin=tabix.stdout, stdout=subprocess.PIPE)
         tabix.stdout.close()  # Allow tabix to receive a SIGPIPE if wcl exits.
         site_count = int(wcl.communicate()[0])
@@ -292,7 +292,7 @@ def group_statistics(data):
 
     return stats
 
-def process_data(filenames, labels=None, contig=None, outfile=None, filetype='bismark_coverage'):
+def process_data(filenames, labels=None, chrom=None, outfile=None, filetype='bismark_coverage'):
     '''Combine input data to read count information.
 
     Parameters
@@ -323,12 +323,12 @@ def process_data(filenames, labels=None, contig=None, outfile=None, filetype='bi
 
     SIZE = 1e5
 
-    contig_sup = contig_supremum(filenames, contig)
-    nsites_sup = nsites_supremum(filenames, contig)
-    chunksize = math.ceil(contig_sup/nsites_sup * SIZE)
+    chrom_sup = chrom_supremum(filenames, chrom)
+    nsites_sup = nsites_supremum(filenames, chrom)
+    chunksize = math.ceil(chrom_sup/nsites_sup * SIZE)
 
-    grid = zip(range(1, contig_sup, chunksize),
-               range(1 + chunksize, contig_sup + chunksize, chunksize))
+    grid = zip(range(1, chrom_sup, chunksize),
+               range(1 + chunksize, chrom_sup + chunksize, chunksize))
 
     #with open(args.output, 'a') as outfile:
         #trackline = 'track type=bedGraph\n'
@@ -338,7 +338,7 @@ def process_data(filenames, labels=None, contig=None, outfile=None, filetype='bi
 
         ### input ###
 
-        region = contig + ':{0}-{1}'.format(*interval)
+        region = chrom + ':{0}-{1}'.format(*interval)
 
         tabix_query = (subprocess.Popen(['tabix', f, region],
                                         stdout=subprocess.PIPE,
@@ -388,9 +388,9 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--version', action='version',
                         version='%(prog)s {0}'.format(__version__))
 
-    parser.add_argument('-c', '--contig', required=True, type=str,
+    parser.add_argument('-c', '--chrom', required=True, type=str,
                         help='''
-                        Name of contig for which computations are done.
+                        Chromosome name.
                         ''')
 
     parser.add_argument('-i', '--input', metavar="URL", required=True,
@@ -421,4 +421,4 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    main(args.input, args.contig, args.query, args.groupby, args.output)
+    main(args.input, args.chrom, args.query, args.groupby, args.output)
