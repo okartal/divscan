@@ -1,12 +1,8 @@
 # test help
 shannon -h
 # test without options
-shannon -i CpG/*.gz -c MT
-# test without options with custom output
-shannon -o MT.temp.bed -c MT -i CpG/*.gz
-# test query without metadata
-shannon -q "stage=='MI'" -c MT -i CpG/*.gz
-# test query with metadata
-shannon -q "stage=='MI'" -m metadata.csv -c MT -i CpG/*.gz
+shannon -o mt.bed -c MT -i metadata.csv
+# test query
+shannon -q "stage=='MI'" -c MT -i metadata.csv -o mt.stage_MI.bed
 # test with query and groupby
-shannon --query "stage=='MI'" --metadata metadata.csv --groupby patient age --contig MT --input CpG/*.gz
+shannon -q "stage=='MI'" -i metadata.csv -g patient age -c MT -o mt.stage_MI.bed
