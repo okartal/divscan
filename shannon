@@ -11,173 +11,141 @@ module.
 """
 
 __author__ = 'Önder Kartal'
+__version__ = "0.1.1"
 
 import argparse
+import collections
 import functools
 import glob
-from itertools import compress
-import numpy as np
-import os
-import pandas as pd
-import sys
-import collections
-import subprocess
 import math
+import os
+import subprocess
+import sys
+
+import numpy as np
+import pandas as pd
 import numexpr as ne
 
-def shannon():
-    '''Command line interface for shannon script.
-    '''
+def shannon(metadata=None, chrom=None, query=None, groupby=None, outfile=None):
+    """Process the command-line arguments.
+    """
 
-    parser = argparse.ArgumentParser()
+    try:
+        population = pd.read_csv(metadata, comment='#', sep='\t', header=0)
+    except FileNotFoundError as e:
+        print(e)
+        sys.exit(1)
 
-    parser.prog = 'shannon'
-    parser.description = ('shannon: information-theory to quantify genomic'
-                          ' population diversity.')
-    parser.add_argument('-v', '--version', action='version',
-                        version='%(prog)s 0.1.0')
-    parser.add_argument('-o', '--output', metavar='FILE')
-    parser.add_argument('-m', '--metadata', metavar='FILE',
-                        help='''
-                        A tab-separated text file that contains population
-                        metadata. Entries in a column named 'label' have to
-                        match the prefix of the input files.
-                        ''')
-    parser.add_argument('-q', '--query', metavar='"STR"', type=str,
-                        help='''
-                        Expression in double quotes that defines the set on
-                        which the diversity index is calculated. Is ignored when
-                        metadata is missing.
-                        ''')
-    parser.add_argument('-g', '--groupby', metavar='STR', nargs='+', type=str,
-                        help='''
-                        The variable or factor/relation according to which the
-                        query set is partitioned. Is ignored when
-                        metadata is missing.
-                        ''')
-    parser.add_argument('-c', '--contig', required=True, type=str,
-                        help='''
-                        Contig ID for which computations are done.
-                        ''')
-    parser.add_argument('-i', '--input', required=True, nargs='+',
-                        help='''
-                        A list of filepaths or a pattern with wildcard that
-                        returns an appropriate list of files.
-                        ''')
+    if query:
+        population.query(query, inplace=True)
 
-    process_arguments(args=parser.parse_args())
-    
-    pass
-
-def process_arguments(args=None):
-    '''Process command-line input.
-    '''
-
-    print('processing...')
-    
-    suffix = "bed"
-
-    if not args.output:
-        # give it a default generic name
-        args.output = ".".join([args.contig, suffix])
-
-    # TODO: use path module to properly handle path objects instead of string-fu
-    if not args.metadata:
-        if (args.query or args.groupby):
-            print('[INPUT ERROR]')
-            print('Please supply --metadata if you want to use --query and/or --groupby!')
-            sys.exit()
-        else:
-            filenames = get_filenames(args.input)
-            labels = [f.split('.')[0] for f in filenames]
-            process_data(filenames, labels=labels, args=args)
-    else:
-        meta = pd.read_table(args.metadata, header=0)
-        files = get_filenames(args.input)
-        if args.query and not args.groupby:
-            queryset = meta.query(args.query)
-            labels = queryset["label"]
-            filenames = [name for name in files if any(name.find(label) != -1 for label in labels)]
-            args.output = ".".join([args.contig, args.query, suffix]).replace("==", "_").replace("'", "")
-            process_data(filenames, labels=queryset["label"], args=args)
-            print('[QUERY DATA]')
-            print("\n".join(filenames))
-            print('[OUTPUT FILE]')
-            print(args.output)
-        if args.groupby:
-            if not args.query:
-                quotientset = meta.groupby(args.groupby)
+    if groupby:
+        metapopulation = population.groupby(groupby)
+        for key, subpop in metapopulation:
+            filename = groupname(by=groupby, name=key, fname=outfile)
+            div = divergence(subpop, chrom, filename, method='jsd')
+            if not os.path.isfile(filename):
+                # write to csv with header
+                div.to_csv(filename, header=True, sep='\t', index=True, mode='a')
             else:
-                quotientset = meta.query(args.query).groupby(args.groupby)
+                div.to_csv(filename, header=False, sep='\t', index=True, mode='a')
 
-            for key, group in quotientset:
-                labels = group["label"]
-                filenames = [name for name in files if any(name.find(label) != -1 for label in labels) and name.endswith('.gz')]
-                if type(key) is not tuple:
-                    key = (str(key), )
-                else:
-                    key = tuple(str(el) for el in key)
-                groups = list(zip(args.groupby, key))
-                groupby = "^".join(["_".join(g) for g in groups])
-                if args.query:
-                    args.output = ".".join([args.contig, args.query, groupby, suffix])
-                else:
-                    args.output = ".".join([args.contig, groupby, suffix])
-                args.output = args.output.replace("==", "_").replace("'", "")
-
-                process_data(filenames, labels=labels, args=args)
-
-                print('[GROUP DATA]')
-                print("\n".join(filenames))
-                print('[GROUP FILE]')
-                print(args.output)
-
-        if not args.query and not args.groupby:
-            print('[NOTE]')
-            print('Metadata is ignored if no --query or --groupby is given.\n'
-                  'We assume that the file prefix is the label of the sample.')
-            filenames = files
-            labels = [f.split('.')[0] for f in filenames]
-            process_data(filenames, labels, args)
+    else:
+        filename = outfile
+        div = divergence(population, chrom, filename, method='jsd')
+        if not os.path.isfile(filename):
+            # write to csv with header
+            div.to_csv(filename, header=True, sep='\t', index=True, mode='a')
+        else:
+            div.to_csv(filename, header=False, sep='\t', index=True, mode='a')
 
     pass
 
-def get_filenames(file_input, metadata=None):
-    '''Checks the file input to get the list of filenames.
-    '''
+def divergence(pop=None, chrom=None, filename=None, imputation=False,
+               method='jsd', filetype='bismark_coverage'):
+    """Computes within-group divergence for population.
+    """
 
-    filenames = []
+    input_files = pop['url']
+    labels = pop['label']
 
-    if len(file_input) > 1:
-        filenames = file_input
-    elif len(file_input) == 1:
-        try:
-            filenames = os.listdir(*file_input)
-        except NotADirectoryError as e:
-            print('[INPUT ERROR]')
-            print('There is only one data file!')
-            sys.exit()
-        except FileNotFoundError as e:
-            # we assume first that it is a pattern with wildcard
-            filenames = glob.glob(*file_input)
-            if not filenames:
-                print('[INPUT ERROR]')
-                print('There are no data files to read!')
-                sys.exit()
+    column = collections.OrderedDict()
 
-    print('[INPUT DATA]')
-    print(*filenames, sep='\n')
+    if filetype == 'bismark_coverage':
+        column[0] = '#chrom'
+        column[1] = 'start'
+        column[2] = 'end'
+        column[4] = 'E' # my single letter code for methylated C
+        column[5] = 'C'
+        types = [str, np.int64, np.int64, np.int32, np.int32]
+        dtype = dict(zip(column.values(), types))
+        alphabet = ['E', 'C']
+        coordinate = [column[i] for i in range(3)]
 
-    return filenames
+    SIZE = 1e4
 
-def contig_supremum(tabixfiles, contig):
-    """Return the least upper bound for the contig end coordinate.
+    chrom_sup = chrom_supremum(input_files, chrom)
+    nsites_sup = nsites_supremum(input_files, chrom)
+    chunksize = math.ceil(chrom_sup/nsites_sup * SIZE)
+
+    grid = zip(range(1, chrom_sup, chunksize),
+               range(1 + chunksize, chrom_sup + chunksize, chunksize))
+
+    for interval in grid:
+
+        ### input ###
+
+        region = chrom + ':{0}-{1}'.format(*interval)
+
+        tabix_query = (subprocess.Popen(['tabix', f, region],
+                                        stdout=subprocess.PIPE,
+                                        universal_newlines=True)
+                       for f in input_files)
+
+        dataframes = (pd.read_table(query.stdout, skiprows=1, header=None,
+                                    usecols=list(column.keys()),
+                                    names=list(column.values()), dtype=dtype,
+                                    index_col=[0, 1, 2])
+                      for query in tabix_query)
+
+        indata = pd.concat(dataframes, axis=1, keys=labels)
+
+        ### process ###
+
+        if indata.empty:
+            continue
+
+        if imputation:
+            impute_value = impute(indata, method='pseudocount')
+            indata.fillna(impute_value, inplace=True)
+
+        jsd_stats = group_statistics(indata)
+
+        return pd.DataFrame(jsd_stats, index=indata.index)
+
+def groupname(by=None, name=None, fname=None):
+    """Return filename of the subgroup.
+    """
+
+    # ensure that name is a tuple of strings
+    name = tuple(str(key) for key in name)
+
+    group = '_and_'.join('_'.join(items) for items in zip(by, name))
+
+    old_suffix = fname.split('.')[-1]
+
+    new_suffix = '.'.join([group, old_suffix])
+
+    return fname.replace(old_suffix, new_suffix)
+
+def chrom_supremum(tabixfiles, chrom):
+    """Return the least upper bound for the chrom end coordinate.
     """
 
     end_coordinate = list()
 
     for f in tabixfiles:
-        tabix = subprocess.Popen(["tabix", f, contig], stdout=subprocess.PIPE)
+        tabix = subprocess.Popen(["tabix", f, chrom], stdout=subprocess.PIPE)
         tail = subprocess.Popen(["tail", "-1"], stdin=tabix.stdout, stdout=subprocess.PIPE)
         cut = subprocess.Popen(["cut", "-f3"], stdin=tail.stdout, stdout=subprocess.PIPE)
         tabix.stdout.close()  # Allow first process to receive a SIGPIPE if process 2 exits.
@@ -186,14 +154,14 @@ def contig_supremum(tabixfiles, contig):
 
     return np.max(end_coordinate)
 
-def nsites_supremum(tabixfiles, contig):
+def nsites_supremum(tabixfiles, chrom):
     '''Return the least upper bound for the number of covered sites.
     '''
 
     sites = list()
 
     for f in tabixfiles:
-        tabix = subprocess.Popen(["tabix", f, contig], stdout=subprocess.PIPE)
+        tabix = subprocess.Popen(["tabix", f, chrom], stdout=subprocess.PIPE)
         wcl = subprocess.Popen(["wc", "-l"], stdin=tabix.stdout, stdout=subprocess.PIPE)
         tabix.stdout.close()  # Allow tabix to receive a SIGPIPE if wcl exits.
         site_count = int(wcl.communicate()[0])
@@ -206,6 +174,8 @@ def entropy(counts, axis=1, method='mle'):
 
     TODO
     - specify units in terms of log base
+    - base e: nat
+    - base 2: bit or shannon (Sh)
     """
 
     expression = "sum(where(pr > 0, -pr * log(pr), 0), axis={})".format(axis)
@@ -238,7 +208,7 @@ def group_statistics(data):
 
     data : pandas DataFrame
 
-    Returns 
+    Returns
     -------
 
     stats : dictionary with statistics for each position
@@ -252,10 +222,10 @@ def group_statistics(data):
 
     """
 
-    DECIMALS = 5
-    
+    DECIMALS = 8
+
     stats = dict()
-    
+
     # input
 
     samples = data.columns.levels[0]
@@ -288,91 +258,51 @@ def group_statistics(data):
 
     return stats
 
-def process_data(filenames, labels=None, args=None, filetype='bismark_coverage'):
-    '''Combine input data to read count information.
-
-    Parameters
-    ----------
-
-    Returns
-    -------
-
-    Notes
-    -----
-
-    '''
-
-    imputation = False
-
-    outfile = args.output
-
-    column = collections.OrderedDict()
-
-    if filetype == 'bismark_coverage':
-        column[0] = '#chrom'
-        column[1] = 'start'
-        column[2] = 'end'
-        column[4] = 'E' # my single letter code for methylated C
-        column[5] = 'C'
-        types = [str, np.int64, np.int64, np.int32, np.int32]
-        dtype = dict(zip(column.values(), types))
-        alphabet = ['E', 'C']
-        coordinate = [column[i] for i in range(3)]
-
-    SIZE = 1e5
-    
-    contig_sup = contig_supremum(filenames, args.contig)
-    nsites_sup = nsites_supremum(filenames, args.contig)
-    chunksize = math.ceil(contig_sup/nsites_sup * SIZE)
-
-    grid = zip(range(1, contig_sup, chunksize),
-               range(1 + chunksize, contig_sup + chunksize, chunksize))
-
-    #with open(args.output, 'a') as outfile:
-        #trackline = 'track type=bedGraph\n'
-        #outfile.write(trackline)
-
-    for interval in grid:
-
-        ### input ###
-
-        region = args.contig + ':{0}-{1}'.format(*interval)
-
-        tabix_query = (subprocess.Popen(['tabix', f, region],
-                                        stdout=subprocess.PIPE,
-                                        universal_newlines=True)
-                       for f in filenames)
-
-        dataframes = (pd.read_table(query.stdout, skiprows=1, header=None,
-                                    usecols=list(column.keys()),
-                                    names=list(column.values()), dtype=dtype,
-                                    index_col=[0, 1, 2])
-                      for query in tabix_query)
-
-        indata = pd.concat(dataframes, axis=1, keys=labels)
-
-        ### process ###
-        
-        if indata.empty:
-            continue
-
-        if imputation:
-            impute_value = impute(indata, method='pseudocount')
-            indata.fillna(impute_value, inplace=True)
-
-        jsd_stats = group_statistics(indata)
-
-        ### output ###
-
-        outdata = pd.DataFrame(jsd_stats, index=indata.index)
-
-        if not os.path.isfile(outfile):
-            # write to csv with header
-            outdata.to_csv(outfile, header=True, sep='\t', index=True, mode='a')
-        else:
-            outdata.to_csv(outfile, header=False, sep='\t', index=True, mode='a')
-
-    pass
-
 if __name__ == '__main__':
-    shannon()
+
+    parser = argparse.ArgumentParser()
+
+    parser.prog = 'shannon'
+
+    parser.description = ('%(prog)s: a program to measure population diversity'
+                          ' using information-theory.')
+
+    parser.add_argument('-v', '--version', action='version',
+                        version='%(prog)s {0}'.format(__version__))
+
+    parser.add_argument('-c', '--chrom', required=True, type=str,
+                        help='''
+                        Chromosome name.
+                        ''')
+
+    parser.add_argument('-i', '--input', metavar="URL", required=True,
+                        help='''
+                        A tab-separated table with metadata for each
+                        sample/record. Lines starting with # are ignored. The
+                        first line is interpreted as the header. The columns
+                        "url" and "label" are mandatory and the corresponding
+                        fields have to be non-empty for each sample.
+                        ''')
+
+    parser.add_argument('-q', '--query', metavar='"STR"', type=str,
+                        help='''
+                        Query expression to select a subset of samples. The
+                        expression has to be in double quotes. Examples: "tissue ==
+                        'leaf'", "age >= 32".
+                        ''')
+
+    parser.add_argument('-g', '--groupby', metavar='STR', nargs='+', type=str,
+                        help='''
+                        The factor according to which the selected set is
+                        partitioned; has to match column names in the input
+                        metadata. One or more factors can be given, which
+                        produces a file for each combination of factors.
+                        ''')
+
+    parser.add_argument('-o', '--output', metavar='FILE',
+                        help='Name of the output file.')
+
+    args = parser.parse_args()
+
+    shannon(metadata=args.input, chrom=args.chrom, query=args.query,
+            groupby=args.groupby, outfile=args.output)
