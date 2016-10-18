@@ -21,7 +21,6 @@ import math
 import os
 import subprocess
 import sys
-from urllib.parse import urlparse
 
 try:
     import numpy as np
