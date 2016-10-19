@@ -222,8 +222,6 @@ def group_statistics(data):
 
     """
 
-    DECIMALS = 8
-
     stats = dict()
 
     # input
@@ -250,11 +248,11 @@ def group_statistics(data):
     total_count = stats['E'] + stats['C']
     average_entropy = np.average(entropy_sample, weights=weight_sample, axis=1)
 
-    stats['average methylation'] = np.round(stats['E']/total_count, DECIMALS)
+    stats['average methylation'] = stats['E']/total_count
 
-    stats['mixture entropy'] = np.round(entropy(sum_alphabet), DECIMALS)
+    stats['mixture entropy'] = entropy(sum_alphabet)
 
-    stats['JS divergence'] = np.round(stats['mixture entropy'] - average_entropy, 4)
+    stats['JS divergence'] = stats['mixture entropy'] - average_entropy
 
     return stats
 
