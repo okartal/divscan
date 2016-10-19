@@ -43,14 +43,19 @@ def shannon(metadata=None, chrom=None, query=None, groupby=None, outfile=None):
         metapopulation = population.groupby(groupby)
         for key, subpop in metapopulation:
             filename = groupname(by=groupby, name=key, fname=outfile)
-            div = divergence(subpop, chrom, filename, method='jsd')
-            withheader = not os.path.isfile(filename)
-            div.to_csv(filename, header=withheader, sep='\t', index=True, mode='a')
+            write_div(population=subpop, chrom, filename)
     else:
         filename = outfile
-        div = divergence(population, chrom, filename, method='jsd')
-        withheader = not os.path.isfile(filename)
-        div.to_csv(filename, header=withheader, sep='\t', index=True, mode='a')
+        write_div(population=population, chrom, filename)
+    pass
+
+def write_div(population=None, chrom=None, filename=None):
+    """Write divergence for population and chrom into filename.
+    """
+
+    div = divergence(population, chrom, filename, method='jsd')
+    withheader = not os.path.isfile(filename)
+    div.to_csv(filename, header=withheader, sep='\t', index=True, mode='a')
 
     pass
 
