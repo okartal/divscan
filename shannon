@@ -44,20 +44,13 @@ def shannon(metadata=None, chrom=None, query=None, groupby=None, outfile=None):
         for key, subpop in metapopulation:
             filename = groupname(by=groupby, name=key, fname=outfile)
             div = divergence(subpop, chrom, filename, method='jsd')
-            if not os.path.isfile(filename):
-                # write to csv with header
-                div.to_csv(filename, header=True, sep='\t', index=True, mode='a')
-            else:
-                div.to_csv(filename, header=False, sep='\t', index=True, mode='a')
-
+            withheader = not os.path.isfile(filename)
+            div.to_csv(filename, header=withheader, sep='\t', index=True, mode='a')
     else:
         filename = outfile
         div = divergence(population, chrom, filename, method='jsd')
-        if not os.path.isfile(filename):
-            # write to csv with header
-            div.to_csv(filename, header=True, sep='\t', index=True, mode='a')
-        else:
-            div.to_csv(filename, header=False, sep='\t', index=True, mode='a')
+        withheader = not os.path.isfile(filename)
+        div.to_csv(filename, header=withheader, sep='\t', index=True, mode='a')
 
     pass
 
