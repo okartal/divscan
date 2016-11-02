@@ -43,10 +43,10 @@ def shannon(metadata=None, chrom=None, query=None, groupby=None, outfile=None):
         metapopulation = population.groupby(groupby)
         for key, subpop in metapopulation:
             filename = groupname(by=groupby, name=key, fname=outfile)
-            write_div(population=subpop, chrom, filename)
+            write_div(population=subpop, chrom=chrom, filename=filename)
     else:
         filename = outfile
-        write_div(population=population, chrom, filename)
+        write_div(population=population, chrom=chrom, filename=filename)
     pass
 
 def write_div(population=None, chrom=None, filename=None):
@@ -100,7 +100,7 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
                                         universal_newlines=True)
                        for f in input_files)
 
-        dataframes = (pd.read_table(query.stdout, skiprows=1, header=None,
+        dataframes = (pd.read_table(query.stdout, comment='#', header=None,
                                     usecols=list(column.keys()),
                                     names=list(column.values()), dtype=dtype,
                                     index_col=[0, 1, 2])
