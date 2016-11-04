@@ -118,9 +118,7 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
             impute_value = impute(indata, method='pseudocount')
             indata.fillna(impute_value, inplace=True)
 
-        jsd_stats = group_statistics(indata)
-
-        return pd.DataFrame(jsd_stats, index=indata.index)
+        return group_statistics(indata)
 
 def groupname(by=None, name=None, fname=None):
     """Return filename of the subgroup.
@@ -221,38 +219,47 @@ def group_statistics(data):
 
     """
 
-    stats = dict()
+    # coverage over population sample: is needed for several downstream
+    # calculations
+    coverage_sample = data.sum(axis=1, level='sample')
 
-    # input
-    sample = data.columns.get_level_values('sample').unique()
-    alphabet = data.columns.get_level_values('alphabet').unique()
-    counts = data.values.reshape(-1, len(sample), len(alphabet))
+    # output: coverage over alphabet and mixture entropy
+    coverage_alphabet = data.sum(axis=1, level='alphabet')
+    mix_entropy = entropy(coverage_alphabet.values)
 
-    # some necessary calculations
+    # average entropy over population sample: is needed alongside mix_entropy to
+    # calculate JS divergence
+    counts = data.values.reshape(coverage_sample.shape[0],
+                                 coverage_sample.shape[1],
+                                 coverage_alphabet.shape[1])
 
-    sum_alphabet = np.nansum(counts, axis=1)
-    sum_sample = np.nansum(counts, axis=2)
-    entropy_sample = entropy(counts, axis=2)
-    weight_sample = sum_sample/sum_sample.sum(axis=1)[..., np.newaxis]
+    sample_weights = coverage_sample.div(coverage_sample.sum(axis=1), axis=0)
 
-    # assignments
+    assert np.allclose(sample_weights.sum(axis=1), 1.0)
 
-    stats['sample size'] = np.sum(np.all(~np.isnan(counts), axis=2), axis=1)
+    avg_entropy = np.average(entropy(counts, axis=2),
+                             weights=sample_weights,
+                             axis=1)
 
-    for ix, base in enumerate(alphabet):
-        # assuming that order of bases is the same in alphabet and subarray
-        stats[base] = np.uint(sum_alphabet[:, ix])
+    # assert that mix>=avg
 
-    total_count = stats['E'] + stats['C']
-    average_entropy = np.average(entropy_sample, weights=weight_sample, axis=1)
+    # assign output columns
+    pop = pd.DataFrame(index=data.index)
 
-    stats['average methylation'] = stats['E']/total_count
+    pop['JSD'] = mix_entropy - avg_entropy
 
-    stats['mixture entropy'] = entropy(sum_alphabet)
+    pop['HMIX'] = mix_entropy
 
-    stats['JS divergence'] = stats['mixture entropy'] - average_entropy
+    pop = pd.concat([pop, coverage_alphabet], axis=1)
 
-    return stats
+    pop['size'] = coverage_sample.notnull().sum(axis=1)
+
+    pop['members'] = (
+        coverage_sample.apply(lambda x: ','.join(x.dropna().index),axis=1))
+
+    # import pdb; pdb.set_trace()
+
+    return pop
 
 if __name__ == '__main__':
 
