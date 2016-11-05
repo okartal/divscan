@@ -80,16 +80,17 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
         alphabet = ['E', 'C']
         coordinate = [column[i] for i in range(3)]
 
-    SIZE = 1e4
+    sup_chrom = chrom_supremum(input_files, chrom)
+    sup_nsites = nsites_supremum(input_files, chrom)
 
-    chrom_sup = chrom_supremum(input_files, chrom)
-    nsites_sup = nsites_supremum(input_files, chrom)
-    chunksize = math.ceil(chrom_sup/nsites_sup * SIZE)
+    LOAD = 1e6
+    chunkload = math.ceil(sup_chrom/sup_nsites * LOAD)
+    chunksize = chunkload if chunkload < sup_chrom else sup_chrom
 
-    grid = zip(range(1, chrom_sup, chunksize),
-               range(1 + chunksize, chrom_sup + chunksize, chunksize))
+    windows = zip(range(1, sup_chrom, chunksize),
+               range(1 + chunksize, sup_chrom + chunksize, chunksize))
 
-    for interval in grid:
+    for interval in windows:
 
         ### input ###
 
@@ -227,7 +228,8 @@ def group_statistics(data):
     coverage_sample = data.sum(axis=1, level='sample')
 
     # output: coverage over alphabet and mixture entropy
-    coverage_alphabet = data.sum(axis=1, level='alphabet')
+    coverage_alphabet = data.sum(axis=1, level='alphabet').astype(np.int64)
+
     mix_entropy = entropy(coverage_alphabet.values)
 
     # average entropy over population sample: is needed alongside mix_entropy to
@@ -236,22 +238,13 @@ def group_statistics(data):
                                  coverage_sample.shape[1],
                                  coverage_alphabet.shape[1])
 
-    # sample_weights = coverage_sample.div(coverage_sample.sum(axis=1), axis=0)
-
-    # assert np.allclose(sample_weights.sum(axis=1), 1.0)
-
     avg_entropy = np.average(entropy(counts, axis=2),
                              weights=coverage_sample.fillna(0),
                              axis=1)
 
-    # assert that mix>=avg
-
-    # assign output columns
-    pop = pd.DataFrame(index=data.index)
-
-    pop['JSD'] = mix_entropy - avg_entropy
-
-    pop['HMIX'] = mix_entropy
+    # initialize output df
+    pop = pd.DataFrame({'JSD': mix_entropy - avg_entropy, 'HMIX': mix_entropy},
+                       index=data.index).round(decimals=3)
 
     pop = pd.concat([pop, coverage_alphabet], axis=1)
 
@@ -259,8 +252,6 @@ def group_statistics(data):
 
     pop['members'] = (
         coverage_sample.apply(lambda x: ','.join(x.dropna().index),axis=1))
-
-    # import pdb; pdb.set_trace()
 
     return pop[pop['sample size'] > 1]
 
