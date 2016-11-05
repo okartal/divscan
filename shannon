@@ -83,7 +83,7 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
     sup_chrom = chrom_supremum(input_files, chrom)
     sup_nsites = nsites_supremum(input_files, chrom)
 
-    LOAD = 1e6
+    LOAD = 1e7
     chunkload = math.ceil(sup_chrom/sup_nsites * LOAD)
     chunksize = chunkload if chunkload < sup_chrom else sup_chrom
 
@@ -193,7 +193,7 @@ def impute(data, method='pseudocount'):
         value = 1
     return value
 
-def group_statistics(data):
+def group_statistics(indata):
     """Compute output for within-group JS divergence.
 
     This functions calculates the within-group Jensen-Shannon divergence (JSD)
@@ -225,7 +225,11 @@ def group_statistics(data):
 
     # coverage over population sample: this quantity is needed for several
     # downstream calculations
-    coverage_sample = data.sum(axis=1, level='sample')
+    coverage_sample_all = indata.sum(axis=1, level='sample')
+    sample_size = coverage_sample_all.notnull().sum(axis=1)
+
+    data = indata[sample_size > 1]
+    coverage_sample = coverage_sample_all[sample_size > 1]
 
     # output: coverage over alphabet and mixture entropy
     coverage_alphabet = data.sum(axis=1, level='alphabet').astype(np.int64)
@@ -248,12 +252,12 @@ def group_statistics(data):
 
     pop = pd.concat([pop, coverage_alphabet], axis=1)
 
-    pop['sample size'] = coverage_sample.notnull().sum(axis=1)
+    pop['sample size'] = sample_size[sample_size > 1]
 
     pop['members'] = (
         coverage_sample.apply(lambda x: ','.join(x.dropna().index),axis=1))
 
-    return pop[pop['sample size'] > 1]
+    return pop
 
 if __name__ == '__main__':
 
