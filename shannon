@@ -193,12 +193,15 @@ def impute(data, method='pseudocount'):
     return value
 
 def group_statistics(data):
-    """Returns statistics for JS divergence.
+    """Compute output for within-group JS divergence.
 
-    This functions uses numpy to return the within-group
-    JS-divergence. Some other statistics are calculated to assess
-    uncertainty as well as between-group divergence for a future
-    function if a second file is given.
+    This functions calculates the within-group Jensen-Shannon divergence (JSD)
+    over a region using the counts over an alphabet for each member of the
+    population sample and each genomic position. It also outputs some quantities
+    to allow later calculations of between-group JSD (HMIX, E, C). Furthermore,
+    population sample size is calculated to exclude positions with sample size =
+    1 and to record it for assessing imbalance and uncertainty when comparing
+    two groups for between-group JSD.
 
     Arguments
     ---------
@@ -208,7 +211,7 @@ def group_statistics(data):
     Returns
     -------
 
-    stats : dictionary with statistics for each position
+    pandas DataFrame for within-group JSD
 
     - sample size : number of samples with coverage > 0
     - E : number of methylated C base counts over all samples
@@ -219,8 +222,8 @@ def group_statistics(data):
 
     """
 
-    # coverage over population sample: is needed for several downstream
-    # calculations
+    # coverage over population sample: this quantity is needed for several
+    # downstream calculations
     coverage_sample = data.sum(axis=1, level='sample')
 
     # output: coverage over alphabet and mixture entropy
@@ -233,12 +236,12 @@ def group_statistics(data):
                                  coverage_sample.shape[1],
                                  coverage_alphabet.shape[1])
 
-    sample_weights = coverage_sample.div(coverage_sample.sum(axis=1), axis=0)
+    # sample_weights = coverage_sample.div(coverage_sample.sum(axis=1), axis=0)
 
-    assert np.allclose(sample_weights.sum(axis=1), 1.0)
+    # assert np.allclose(sample_weights.sum(axis=1), 1.0)
 
     avg_entropy = np.average(entropy(counts, axis=2),
-                             weights=sample_weights,
+                             weights=coverage_sample.fillna(0),
                              axis=1)
 
     # assert that mix>=avg
@@ -252,14 +255,14 @@ def group_statistics(data):
 
     pop = pd.concat([pop, coverage_alphabet], axis=1)
 
-    pop['size'] = coverage_sample.notnull().sum(axis=1)
+    pop['sample size'] = coverage_sample.notnull().sum(axis=1)
 
     pop['members'] = (
         coverage_sample.apply(lambda x: ','.join(x.dropna().index),axis=1))
 
     # import pdb; pdb.set_trace()
 
-    return pop
+    return pop[pop['sample size'] > 1]
 
 if __name__ == '__main__':
 
