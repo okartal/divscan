@@ -80,16 +80,17 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
         alphabet = ['E', 'C']
         coordinate = [column[i] for i in range(3)]
 
-    SIZE = 1e4
+    sup_chrom = chrom_supremum(input_files, chrom)
+    sup_nsites = nsites_supremum(input_files, chrom)
 
-    chrom_sup = chrom_supremum(input_files, chrom)
-    nsites_sup = nsites_supremum(input_files, chrom)
-    chunksize = math.ceil(chrom_sup/nsites_sup * SIZE)
+    LOAD = 1e7
+    chunkload = math.ceil(sup_chrom/sup_nsites * LOAD)
+    chunksize = chunkload if chunkload < sup_chrom else sup_chrom
 
-    grid = zip(range(1, chrom_sup, chunksize),
-               range(1 + chunksize, chrom_sup + chunksize, chunksize))
+    windows = zip(range(1, sup_chrom, chunksize),
+               range(1 + chunksize, sup_chrom + chunksize, chunksize))
 
-    for interval in grid:
+    for interval in windows:
 
         ### input ###
 
@@ -106,7 +107,8 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
                                     index_col=[0, 1, 2])
                       for query in tabix_query)
 
-        indata = pd.concat(dataframes, axis=1, keys=labels)
+        indata = pd.concat(dataframes, axis=1, keys=labels,
+                           names=['sample', 'alphabet'])
 
         ### process ###
 
@@ -117,9 +119,7 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
             impute_value = impute(indata, method='pseudocount')
             indata.fillna(impute_value, inplace=True)
 
-        jsd_stats = group_statistics(indata)
-
-        return pd.DataFrame(jsd_stats, index=indata.index)
+        return group_statistics(indata)
 
 def groupname(by=None, name=None, fname=None):
     """Return filename of the subgroup.
@@ -193,13 +193,16 @@ def impute(data, method='pseudocount'):
         value = 1
     return value
 
-def group_statistics(data):
-    """Returns statistics for JS divergence.
+def group_statistics(indata):
+    """Compute output for within-group JS divergence.
 
-    This functions uses numpy to return the within-group
-    JS-divergence. Some other statistics are calculated to assess
-    uncertainty as well as between-group divergence for a future
-    function if a second file is given.
+    This functions calculates the within-group Jensen-Shannon divergence (JSD)
+    over a region using the counts over an alphabet for each member of the
+    population sample and each genomic position. It also outputs some quantities
+    to allow later calculations of between-group JSD (HMIX, E, C). Furthermore,
+    population sample size is calculated to exclude positions with sample size =
+    1 and to record it for assessing imbalance and uncertainty when comparing
+    two groups for between-group JSD.
 
     Arguments
     ---------
@@ -209,7 +212,7 @@ def group_statistics(data):
     Returns
     -------
 
-    stats : dictionary with statistics for each position
+    pandas DataFrame for within-group JSD
 
     - sample size : number of samples with coverage > 0
     - E : number of methylated C base counts over all samples
@@ -220,39 +223,41 @@ def group_statistics(data):
 
     """
 
-    stats = dict()
+    # coverage over population sample: this quantity is needed for several
+    # downstream calculations
+    coverage_sample_all = indata.sum(axis=1, level='sample')
+    sample_size = coverage_sample_all.notnull().sum(axis=1)
 
-    # input
+    data = indata[sample_size > 1]
+    coverage_sample = coverage_sample_all[sample_size > 1]
 
-    samples = data.columns.levels[0]
-    alphabet = data.columns.levels[1]
-    counts = data.values.reshape(-1, len(samples), len(alphabet))
+    # output: coverage over alphabet and mixture entropy
+    coverage_alphabet = data.sum(axis=1, level='alphabet').astype(np.int64)
 
-    # some necessary calculations
+    mix_entropy = entropy(coverage_alphabet.values)
 
-    sum_alphabet = np.nansum(counts, axis=1)
-    sum_sample = np.nansum(counts, axis=2)
-    entropy_sample = entropy(counts, axis=2)
-    weight_sample = sum_sample/sum_sample.sum(axis=1)[..., np.newaxis]
+    # average entropy over population sample: is needed alongside mix_entropy to
+    # calculate JS divergence
+    counts = data.values.reshape(coverage_sample.shape[0],
+                                 coverage_sample.shape[1],
+                                 coverage_alphabet.shape[1])
 
-    # assignments
+    avg_entropy = np.average(entropy(counts, axis=2),
+                             weights=coverage_sample.fillna(0),
+                             axis=1)
 
-    stats['sample size'] = np.sum(np.all(~np.isnan(counts), axis=2), axis=1)
+    # initialize output df
+    pop = pd.DataFrame({'JSD': mix_entropy - avg_entropy, 'HMIX': mix_entropy},
+                       index=data.index).round(decimals=3)
 
-    for ix, base in enumerate(alphabet):
-        # assuming that order of bases is the same in alphabet and subarray
-        stats[base] = np.uint(sum_alphabet[:, ix])
+    pop = pd.concat([pop, coverage_alphabet], axis=1)
 
-    total_count = stats['E'] + stats['C']
-    average_entropy = np.average(entropy_sample, weights=weight_sample, axis=1)
+    pop['sample size'] = sample_size[sample_size > 1]
 
-    stats['average methylation'] = stats['E']/total_count
+    pop['members'] = (
+        coverage_sample.apply(lambda x: ','.join(x.dropna().index),axis=1))
 
-    stats['mixture entropy'] = entropy(sum_alphabet)
-
-    stats['JS divergence'] = stats['mixture entropy'] - average_entropy
-
-    return stats
+    return pop
 
 if __name__ == '__main__':
 

@@ -1,6 +1,5 @@
 .snakemake
 \#*
-__*
 paper/auto/
 paper/*.aux
 paper/*.bbl
