@@ -129,7 +129,7 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
 
         ### OUTPUT: if file does not exist then write header ###
 
-        need_header = not os.path.isfile(filename)
+        need_header = os.stat(filename).st_size == 0 or not os.path.isfile(filename)
 
         div.to_csv(filename, header=need_header, sep='\t', index=True, mode='a')
 
@@ -322,6 +322,10 @@ if __name__ == '__main__':
                         ''')
 
     args = parser.parse_args()
+    
+    if os.path.isfile(args.out) and not os.stat(args.out).st_size == 0:
+        msg = "\nExecution stops! Output file exists and is not empty!\n"
+        sys.exit(msg)
 
     shannon(metadata=args.input, chrom=args.chrom, query=args.query,
             groupby=args.groupby, outfile=args.output)
