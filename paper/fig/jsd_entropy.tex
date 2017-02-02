@@ -1,13 +1,11 @@
 
 \centering
-\includegraphics[width=1\textwidth]{jsd_entropy.eps}
+\includegraphics[width=1\textwidth]{jsd_entropy.svg}
 \caption{
-    Jensen-Shannon Divergence as mixing entropy.
-    The graph shows the entropy $H$ of a discrete binary probability distribution function (PDF) $f(\{x_1, x_2\})$ as a function of the probability $p=f(x_1)=1-f(x_2)$.
-    The black points show the location of three example PDFs, $f_1$, $f_2$ and $f_3$, in this space.
-    Features highlighted in red are quantities entering the Jensen-Shannon Divergence (JSD).
-    The entropy of the mixture $H(f_\text{mix})$ can lie anywhere on the red segment of the curve.
-    The average entropy, $\langle H \rangle$, is restricted to the area designated by the triangle.
+    Jensen-Shannon Divergence (JSD) in terms of Shannon entropy.
+    The black curve shows the entropy function of a binary PDF in terms of $p=1-q$ and black dots designate three example PDFs (black).
+    The locations of the corresponding quantities for calculating JSD depend on the weights but can only lie on the red curve segment and polygon , respectively.
+    Blue dots show an example mixture and the corresponding informationn loss.
     }
 \label{fig:jsd_entropy}
 
