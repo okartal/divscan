@@ -30,7 +30,7 @@
    $ source activate shannon
    ```
 2. Run test
-   ```shell
+   ```
    $ cd tests
    $ ./test.sh
    ```
