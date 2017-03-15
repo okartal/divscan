@@ -129,9 +129,15 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
 
         ### OUTPUT: if file does not exist then write header ###
 
-        need_header = os.stat(filename).st_size == 0 or not os.path.isfile(filename)
+        if os.path.isfile(filename):
+            if os.stat(filename).st_size == 0:
+                header = True
+            else:
+                header = False
+        else:
+            header = True
 
-        div.to_csv(filename, header=need_header, sep='\t', index=True, mode='a')
+        div.to_csv(filename, header=header, sep='\t', index=True, mode='a')
 
     pass
 
