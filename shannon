@@ -323,7 +323,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     
-    if os.path.isfile(args.out) and not os.stat(args.out).st_size == 0:
+    if os.path.isfile(args.output) and not os.stat(args.output).st_size == 0:
         msg = "\nExecution stops! Output file exists and is not empty!\n"
         sys.exit(msg)
 
