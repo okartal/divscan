@@ -84,7 +84,7 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
     if sup_chrom == None:
         logging.info("Skipping because chromosome is missing.")
         return False
-    sup_nsites = nsites_supremum(inputFiles, chrom)
+    sup_nsites = nsites_supremum(input_files, chrom)
     if sup_nsites == None or sup_nsites == 0:
         logging.info("Skipping because there are no entries.")
         return False
