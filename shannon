@@ -15,6 +15,7 @@ __version__ = "0.2.2"
 
 import argparse
 import collections
+import csv
 import functools
 import glob
 import math
@@ -34,7 +35,10 @@ def shannon(metadata=None, chrom=None, query=None, groupby=None, outfile=None):
     """
 
     try:
-        population = pd.read_csv(metadata, comment='#', sep='\t', header=0)
+        s = csv.Sniffer()
+        with open(metadata, 'r') as mfile:
+            sep = s.sniff(mfile.readline()).delimiter
+        population = pd.read_csv(metadata, comment='#', sep=sep, header=0)
     except FileNotFoundError as e:
         print(e)
         sys.exit(1)
