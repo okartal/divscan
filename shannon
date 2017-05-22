@@ -35,13 +35,16 @@ def shannon(metadata=None, chrom=None, query=None, groupby=None, outfile=None):
     """
 
     try:
-        s = csv.Sniffer()
-        with open(metadata, 'r') as mfile:
-            sep = s.sniff(mfile.readline()).delimiter
-        population = pd.read_csv(metadata, comment='#', sep=sep, header=0)
+        with open(metadata, 'r') as csvfile:
+            dialect = csv.Sniffer().sniff(csvfile.read(1024))
+            sep = dialect.delimiter
+    except csv.Error:
+        sep = '\t'
     except FileNotFoundError as e:
         print(e)
         sys.exit(1)
+
+    population = pd.read_csv(metadata, comment='#', sep=sep, header=0)
 
     if query:
         population.query(query, inplace=True)
@@ -82,7 +85,7 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
     # load is average number of expected sites in the region, this determines
     # the memory requirements
 
-    LOAD = 1e3
+    LOAD = 1e2
 
     sup_chrom = chrom_supremum(input_files, chrom)
     if sup_chrom == None:
