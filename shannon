@@ -88,7 +88,7 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
     if sup_nsites == None or sup_nsites == 0:
         logging.info("Skipping because there are no entries.")
         return False
-    stepSize = math.ceil(sup_chrom/sup_nsites * LOAD)
+    stepsize = math.ceil(sup_chrom/sup_nsites * LOAD)
 
     if stepsize < sup_chrom:
         step = stepsize
