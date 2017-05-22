@@ -81,14 +81,14 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
     LOAD = 1e3
 
     sup_chrom = chrom_supremum(input_files, chrom)
-    if supChrom == None:
+    if sup_chrom == None:
         logging.info("Skipping because chromosome is missing.")
         return False
     supNsites = nsitesSupremum(inputFiles, chrom)
     if supNsites == None or supNsites == 0:
         logging.info("Skipping because there are no entries.")
         return False
-    stepSize = math.ceil(supChrom/supNsites * LOAD)
+    stepSize = math.ceil(sup_chrom/supNsites * LOAD)
 
     if stepsize < sup_chrom:
         step = stepsize
