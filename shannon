@@ -26,6 +26,9 @@ import numpy as np
 import pandas as pd
 import numexpr as ne
 
+import logging
+logging.basicConfig(format="=== %(levelname)s === %(asctime)s === %(message)s", level=logging.DEBUG, datefmt='%Y-%m-%d %H:%M:%S')
+
 def shannon(metadata=None, chrom=None, query=None, groupby=None, outfile=None):
     """Process the command-line arguments.
     """
@@ -78,8 +81,14 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
     LOAD = 1e3
 
     sup_chrom = chrom_supremum(input_files, chrom)
-    sup_nsites = nsites_supremum(input_files, chrom)
-    stepsize = math.ceil(sup_chrom/sup_nsites * LOAD)
+    if supChrom == None:
+        logging.info("Skipping because chromosome is missing.")
+        return False
+    supNsites = nsitesSupremum(inputFiles, chrom)
+    if supNsites == None or supNsites == 0:
+        logging.info("Skipping because there are no entries.")
+        return False
+    stepSize = math.ceil(supChrom/supNsites * LOAD)
 
     if stepsize < sup_chrom:
         step = stepsize
@@ -168,10 +177,18 @@ def chrom_supremum(tabixfiles, chrom):
         tail = subprocess.Popen(["tail", "-1"], stdin=tabix.stdout, stdout=subprocess.PIPE)
         cut = subprocess.Popen(["cut", "-f3"], stdin=tail.stdout, stdout=subprocess.PIPE)
         tabix.stdout.close()  # Allow first process to receive a SIGPIPE if process 2 exits.
-        base_position = int(cut.communicate()[0])
-        end_coordinate.append(base_position)
-
-    return np.max(end_coordinate)
+        try:
+            base_position = int(cut.communicate()[0])
+            end_coordinate.append(base_position)
+        except ValueError:
+            continue
+    
+    try:
+        out = np.max(end_coordinate)
+    except ValueError:
+        out = None
+    
+    return out
 
 def nsites_supremum(tabixfiles, chrom):
     '''Return the least upper bound for the number of covered sites.
@@ -183,10 +200,18 @@ def nsites_supremum(tabixfiles, chrom):
         tabix = subprocess.Popen(["tabix", f, chrom], stdout=subprocess.PIPE)
         wcl = subprocess.Popen(["wc", "-l"], stdin=tabix.stdout, stdout=subprocess.PIPE)
         tabix.stdout.close()  # Allow tabix to receive a SIGPIPE if wcl exits.
-        site_count = int(wcl.communicate()[0])
-        sites.append(site_count)
+        try:
+            site_count = int(wcl.communicate()[0])
+            sites.append(site_count)
+        except ValueError:
+            continue
 
-    return np.max(sites)
+    try:
+        out = np.max(sites)
+    except ValueError:
+        out = None
+    
+    return out
 
 def entropy(counts, axis=1, method='mle'):
     """Entropy of probability mass functions.
