@@ -18,17 +18,21 @@ import collections
 import csv
 import functools
 import glob
+import logging
 import math
 import os
 import subprocess
 import sys
 
+import numexpr as ne
 import numpy as np
 import pandas as pd
-import numexpr as ne
 
-import logging
-logging.basicConfig(format="=== %(levelname)s === %(asctime)s === %(message)s", level=logging.DEBUG, datefmt='%Y-%m-%d %H:%M:%S')
+logging.basicConfig(format="=== %(levelname)s === %(asctime)s === %(message)s",
+                    level=logging.DEBUG, datefmt='%Y-%m-%d %H:%M:%S')
+
+LOG2E = np.log2(math.e)
+
 
 def shannon(metadata=None, chrom=None, query=None, groupby=None, outfile=None):
     """Process the command-line arguments.
@@ -59,10 +63,17 @@ def shannon(metadata=None, chrom=None, query=None, groupby=None, outfile=None):
         divergence(pop=population, chrom=chrom, filename=filename)
     pass
 
+
 def divergence(pop=None, chrom=None, filename=None, imputation=False,
                method='jsd', filetype='bismark_coverage'):
     """Computes within-group divergence for population.
     """
+
+    # parameters
+    # load is measured in expected number of sites in the queried region
+    min_sample_size = 2
+    min_count = 3
+    load = 1e5
 
     input_files = pop['url']
 
@@ -74,28 +85,25 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
         column[0] = '#chrom'
         column[1] = 'start'
         column[2] = 'end'
-        column[4] = 'E' # my single letter code for methylated C
+        column[4] = 'E'  # my single letter code for methylated C
         column[5] = 'C'
         types = [str, np.int64, np.int64, np.int32, np.int32]
         dtype = dict(zip(column.values(), types))
         alphabet = ['E', 'C']
         coordinate = [column[i] for i in range(3)]
 
-    # Get the query region:
-    # load is average number of expected sites in the region, this determines
-    # the memory requirements
-
-    LOAD = 1e2
-
     sup_chrom = chrom_supremum(input_files, chrom)
     if sup_chrom == None:
         logging.info("Skipping because chromosome is missing.")
         return False
+    
     sup_nsites = nsites_supremum(input_files, chrom)
+    
     if sup_nsites == None or sup_nsites == 0:
         logging.info("Skipping because there are no entries.")
         return False
-    stepsize = math.ceil(sup_chrom/sup_nsites * LOAD)
+    
+    stepsize = math.ceil(sup_chrom / sup_nsites * load)
 
     if stepsize < sup_chrom:
         step = stepsize
@@ -112,7 +120,7 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
 
     for interval in regions:
 
-        ### INPUT: load data into dataframe ###
+        # INPUT
 
         region = chrom + ':{0}-{1}'.format(*interval)
 
@@ -128,34 +136,59 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
                       for query in tabix_query)
 
         indata = pd.concat(dataframes, axis=1, keys=labels,
-                           names=['sample', 'alphabet'])
+                           names=['sample', 'feature'])
 
-        ### PROCESS: compute divergence stats ###
-
+        # PROCESS
         print('processing', region, '...')
-
-        if indata.empty:
-            continue
 
         if imputation:
             impute_value = impute(indata, method='pseudocount')
             indata.fillna(impute_value, inplace=True)
 
-        div = group_statistics(indata)
+        count_per_unit = indata.sum(axis=1, level='sample')
+        
+        sample_size = count_per_unit.notnull().sum(axis=1)
 
-        ### OUTPUT: if file does not exist then write header ###
+        # filter
+        pass_count = (count_per_unit >= min_count).any(axis=1)
+        pass_sample_size = (sample_size >= min_sample_size) 
+        pass_filter = (pass_count & pass_sample_size)
 
-        if os.path.isfile(filename):
-            if os.stat(filename).st_size == 0:
+        data = indata[pass_filter]
+        # import pdb; pdb.set_trace()
+        if not data.empty:
+            # data transformations
+            # data = indata[pass_sample_size]
+            data_unit = count_per_unit[pass_filter]
+            data_feature = (data.sum(axis=1, level='feature').astype(np.int32))
+            counts = data.values.reshape(
+                data_unit.shape[0],
+                data_unit.shape[1],
+                data_feature.shape[1])
+            # JSD terms
+            mix_entropy = entropy(data_feature.values)
+            avg_entropy = np.average(
+                entropy(counts, axis=2), weights=data_unit.fillna(0), axis=1)
+            # output
+            div = data_feature
+            div.insert(0, 'JSD_bit_', LOG2E * (mix_entropy - avg_entropy))
+            div.insert(1, 'sample size', sample_size[pass_filter])
+            div.insert(2, 'HMIX_bit_', LOG2E * mix_entropy)
+
+            if not os.path.isfile(filename):
+                header = True
+            elif os.stat(filename).st_size == 0:
                 header = True
             else:
                 header = False
+
+            (div
+             .round({'JSD_bit_': 3, 'HMIX_bit_': 3})
+             .to_csv(filename, header=header, sep='\t', index=True, mode='a'))
         else:
-            header = True
-
-        div.to_csv(filename, header=header, sep='\t', index=True, mode='a')
-
-    pass
+            continue
+    
+    return None
 
 
 def groupname(by=None, name=None, fname=None):
@@ -173,6 +206,7 @@ def groupname(by=None, name=None, fname=None):
 
     return fname.replace(old_suffix, new_suffix)
 
+
 def chrom_supremum(tabixfiles, chrom):
     """Return the least upper bound for the chrom end coordinate.
     """
@@ -181,21 +215,25 @@ def chrom_supremum(tabixfiles, chrom):
 
     for f in tabixfiles:
         tabix = subprocess.Popen(["tabix", f, chrom], stdout=subprocess.PIPE)
-        tail = subprocess.Popen(["tail", "-1"], stdin=tabix.stdout, stdout=subprocess.PIPE)
-        cut = subprocess.Popen(["cut", "-f3"], stdin=tail.stdout, stdout=subprocess.PIPE)
-        tabix.stdout.close()  # Allow first process to receive a SIGPIPE if process 2 exits.
+        tail = subprocess.Popen(
+            ["tail", "-1"], stdin=tabix.stdout, stdout=subprocess.PIPE)
+        cut = subprocess.Popen(
+            ["cut", "-f3"], stdin=tail.stdout, stdout=subprocess.PIPE)
+        # Allow first process to receive a SIGPIPE if process 2 exits.
+        tabix.stdout.close()
         try:
             base_position = int(cut.communicate()[0])
             end_coordinate.append(base_position)
         except ValueError:
             continue
-    
+
     try:
         out = np.max(end_coordinate)
     except ValueError:
         out = None
-    
+
     return out
+
 
 def nsites_supremum(tabixfiles, chrom):
     '''Return the least upper bound for the number of covered sites.
@@ -205,7 +243,8 @@ def nsites_supremum(tabixfiles, chrom):
 
     for f in tabixfiles:
         tabix = subprocess.Popen(["tabix", f, chrom], stdout=subprocess.PIPE)
-        wcl = subprocess.Popen(["wc", "-l"], stdin=tabix.stdout, stdout=subprocess.PIPE)
+        wcl = subprocess.Popen(
+            ["wc", "-l"], stdin=tabix.stdout, stdout=subprocess.PIPE)
         tabix.stdout.close()  # Allow tabix to receive a SIGPIPE if wcl exits.
         try:
             site_count = int(wcl.communicate()[0])
@@ -217,16 +256,12 @@ def nsites_supremum(tabixfiles, chrom):
         out = np.max(sites)
     except ValueError:
         out = None
-    
+
     return out
 
-def entropy(counts, axis=1, method='mle'):
-    """Entropy of probability mass functions.
 
-    TODO
-    - specify units in terms of log base
-    - base e: nat
-    - base 2: bit or shannon (Sh)
+def entropy(counts, axis=1, method='mle'):
+    """Entropy (in nits) of feature frequency profile.
     """
 
     expression = "sum(where(pr > 0, -pr * log(pr), 0), axis={})".format(axis)
@@ -235,82 +270,85 @@ def entropy(counts, axis=1, method='mle'):
         '''Maximum-likelihood/plug-in/non-parametric estimator
         '''
         sumCounts = counts.sum(axis)[..., np.newaxis]
-        pr = counts/sumCounts
+        pr = counts / sumCounts
         result = ne.evaluate(expression)
 
     return result
 
+
 def impute(data, method='pseudocount'):
     if method == 'pseudocount':
-        # given by the parameters of a uninformative Dirichlet prior on the probabilities
+        # given by the parameters of a uninformative Dirichlet prior on the
+        # probabilities
         value = 1
     return value
 
-def group_statistics(indata):
-    """Compute output for within-group JS divergence.
 
-    This functions calculates the within-group Jensen-Shannon divergence (JSD)
-    over a region using the counts over an alphabet for each member of the
-    population sample and each genomic position. It also outputs some quantities
-    to allow later calculations of between-group JSD (HMIX, E, C). Furthermore,
-    population sample size is calculated to exclude positions with sample size =
-    1 and to record it for assessing imbalance and uncertainty when comparing
-    two groups for between-group JSD.
+# def group_statistics(indata):
+#     """Compute output for within-group JS divergence.
 
-    Arguments
-    ---------
+#     This functions calculates the within-group Jensen-Shannon divergence (JSD)
+#     over a region using the counts over an alphabet for each member of the
+#     population sample and each genomic position. It also outputs some quantities
+#     to allow later calculations of between-group JSD (HMIX, E, C). Furthermore,
+#     population sample size is calculated to exclude positions with sample size =
+#     1 and to record it for assessing imbalance and uncertainty when comparing
+#     two groups for between-group JSD.
 
-    data : pandas DataFrame
+#     Arguments
+#     ---------
 
-    Returns
-    -------
+#     data : pandas DataFrame
 
-    pandas DataFrame for within-group JSD
+#     Returns
+#     -------
 
-    - sample size : number of samples with coverage > 0
-    - E : number of methylated C base counts over all samples
-    - C : number of unmethylated C base counts over all samples
-    - average methylation : weighted average methylation level over all samples
-    - mixture entropy : entropy of the mixture distribution
-    - JS divergence : mixture entropy - weighted average entropy of all distributions
+#     pandas DataFrame for within-group JSD
 
-    """
+#     - sample size : number of samples with coverage > 0
+#     - E : number of methylated C base counts over all samples
+#     - C : number of unmethylated C base counts over all samples
+#     - average methylation : weighted average methylation level over all samples
+#     - mixture entropy : entropy of the mixture distribution
+#     - JS divergence : mixture entropy - weighted average entropy of all distributions
 
-    # coverage over population sample: this quantity is needed for several
-    # downstream calculations
-    coverage_sample_all = indata.sum(axis=1, level='sample')
-    sample_size = coverage_sample_all.notnull().sum(axis=1)
+#     """
 
-    data = indata[sample_size > 1]
-    coverage_sample = coverage_sample_all[sample_size > 1]
+#     # coverage over population sample: this quantity is needed for several
+#     # downstream calculations
+#     count_per_unit[sample_size > 1]
 
-    # output: coverage over alphabet and mixture entropy
-    coverage_alphabet = data.sum(axis=1, level='alphabet').astype(np.int64)
+#     # output: coverage over alphabet and mixture entropy
+#     data_feature = data.sum(axis=1, level='alphabet').astype(np.int64)
 
-    mix_entropy = entropy(coverage_alphabet.values)
+#     mix_entropy = entropy(data_feature.values)
 
-    # average entropy over population sample: is needed alongside mix_entropy to
-    # calculate JS divergence
-    counts = data.values.reshape(coverage_sample.shape[0],
-                                 coverage_sample.shape[1],
-                                 coverage_alphabet.shape[1])
+#     # average entropy over population sample: is needed alongside mix_entropy to
+#     # calculate JS divergence
+#     counts = data.values.reshape(data_unit.shape[0],
 
-    avg_entropy = np.average(entropy(counts, axis=2),
-                             weights=coverage_sample.fillna(0),
-                             axis=1)
+#                                  data_unit.shape[1],
 
-    # initialize output df
-    pop = pd.DataFrame({'JSD': mix_entropy - avg_entropy, 'HMIX': mix_entropy},
-                       index=data.index).round(decimals=3)
+#                                  data_feature.shape[1])
 
-    pop = pd.concat([pop, coverage_alphabet], axis=1)
+#     avg_entropy = np.average(entropy(counts, axis=2),
+#                              weights=data_unit.fillna(0),
+#                              axis=1)
 
-    pop['sample size'] = sample_size[sample_size > 1]
+#     # initialize output df
+#     pop = pd.DataFrame({'JSD': mix_entropy - avg_entropy, 'HMIX': mix_entropy},
+#                        index=data.index).round(decimals=3)
 
-    pop['members'] = (
-        coverage_sample.apply(lambda x: ','.join(x.dropna().index),axis=1))
+#     pop = pd.concat([pop, data_feature], axis=1)
 
-    return pop
+#     pop['sample size'] = sample_size[sample_size > 1]
+
+#     # pop['members'] = (
+#     # data_unit.apply(lambda x: ','.join(x.dropna().index)
+#     # ,axis=1))
+
+#     return pop
+
 
 if __name__ == '__main__':
 
@@ -360,7 +398,7 @@ if __name__ == '__main__':
                         ''')
 
     args = parser.parse_args()
-    
+
     if os.path.isfile(args.output) and not os.stat(args.output).st_size == 0:
         msg = "\nExecution stops! Output file exists and is not empty!\n"
         sys.exit(msg)
