@@ -11,7 +11,6 @@ module.
 """
 
 __author__ = 'Önder Kartal'
-__version__ = "0.2.2"
 
 import argparse
 import collections
@@ -96,13 +95,13 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
     if sup_chrom == None:
         logging.info("Skipping because chromosome is missing.")
         return False
-    
+
     sup_nsites = nsites_supremum(input_files, chrom)
-    
+
     if sup_nsites == None or sup_nsites == 0:
         logging.info("Skipping because there are no entries.")
         return False
-    
+
     stepsize = math.ceil(sup_chrom / sup_nsites * load)
 
     if stepsize < sup_chrom:
@@ -146,19 +145,18 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
             indata.fillna(impute_value, inplace=True)
 
         count_per_unit = indata.sum(axis=1, level='sample')
-        
+
         sample_size = count_per_unit.notnull().sum(axis=1)
 
         # filter
         pass_count = (count_per_unit >= min_count).any(axis=1)
-        pass_sample_size = (sample_size >= min_sample_size) 
+        pass_sample_size = (sample_size >= min_sample_size)
         pass_filter = (pass_count & pass_sample_size)
 
         data = indata[pass_filter]
-        # import pdb; pdb.set_trace()
+
         if not data.empty:
             # data transformations
-            # data = indata[pass_sample_size]
             data_unit = count_per_unit[pass_filter]
             data_feature = (data.sum(axis=1, level='feature').astype(np.int32))
             counts = data.values.reshape(
@@ -174,6 +172,7 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
             div.insert(0, 'JSD_bit_', LOG2E * (mix_entropy - avg_entropy))
             div.insert(1, 'sample size', sample_size[pass_filter])
             div.insert(2, 'HMIX_bit_', LOG2E * mix_entropy)
+            # div['members'] = (data_unit.apply(lambda x: ','.join(x.dropna().index), axis=1))
 
             if not os.path.isfile(filename):
                 header = True
@@ -187,7 +186,7 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
              .to_csv(filename, header=header, sep='\t', index=True, mode='a'))
         else:
             continue
-    
+
     return None
 
 
@@ -261,7 +260,7 @@ def nsites_supremum(tabixfiles, chrom):
 
 
 def entropy(counts, axis=1, method='mle'):
-    """Entropy (in nits) of feature frequency profile.
+    """Entropy (in nat) of feature frequency profile.
     """
 
     expression = "sum(where(pr > 0, -pr * log(pr), 0), axis={})".format(axis)
@@ -282,72 +281,6 @@ def impute(data, method='pseudocount'):
         # probabilities
         value = 1
     return value
-
-
-# def group_statistics(indata):
-#     """Compute output for within-group JS divergence.
-
-#     This functions calculates the within-group Jensen-Shannon divergence (JSD)
-#     over a region using the counts over an alphabet for each member of the
-#     population sample and each genomic position. It also outputs some quantities
-#     to allow later calculations of between-group JSD (HMIX, E, C). Furthermore,
-#     population sample size is calculated to exclude positions with sample size =
-#     1 and to record it for assessing imbalance and uncertainty when comparing
-#     two groups for between-group JSD.
-
-#     Arguments
-#     ---------
-
-#     data : pandas DataFrame
-
-#     Returns
-#     -------
-
-#     pandas DataFrame for within-group JSD
-
-#     - sample size : number of samples with coverage > 0
-#     - E : number of methylated C base counts over all samples
-#     - C : number of unmethylated C base counts over all samples
-#     - average methylation : weighted average methylation level over all samples
-#     - mixture entropy : entropy of the mixture distribution
-#     - JS divergence : mixture entropy - weighted average entropy of all distributions
-
-#     """
-
-#     # coverage over population sample: this quantity is needed for several
-#     # downstream calculations
-#     count_per_unit[sample_size > 1]
-
-#     # output: coverage over alphabet and mixture entropy
-#     data_feature = data.sum(axis=1, level='alphabet').astype(np.int64)
-
-#     mix_entropy = entropy(data_feature.values)
-
-#     # average entropy over population sample: is needed alongside mix_entropy to
-#     # calculate JS divergence
-#     counts = data.values.reshape(data_unit.shape[0],
-
-#                                  data_unit.shape[1],
-
-#                                  data_feature.shape[1])
-
-#     avg_entropy = np.average(entropy(counts, axis=2),
-#                              weights=data_unit.fillna(0),
-#                              axis=1)
-
-#     # initialize output df
-#     pop = pd.DataFrame({'JSD': mix_entropy - avg_entropy, 'HMIX': mix_entropy},
-#                        index=data.index).round(decimals=3)
-
-#     pop = pd.concat([pop, data_feature], axis=1)
-
-#     pop['sample size'] = sample_size[sample_size > 1]
-
-#     # pop['members'] = (
-#     # data_unit.apply(lambda x: ','.join(x.dropna().index)
-#     # ,axis=1))
-
-#     return pop
 
 
 if __name__ == '__main__':
