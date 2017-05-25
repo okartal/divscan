@@ -1,9 +1,9 @@
-# shannon - Genome Analysis using Information Theory
+# Shannon - Measuring Genomic Diversity using Information Theory
 
 ## Requirements
 
-* Install git (see <https://git-scm.com/>)
-* Install Miniconda for Python3 (see <https://conda.io/miniconda.html>)
+* git (see <https://git-scm.com/>)
+* Miniconda for Python3 (see <https://conda.io/miniconda.html>)
 
 ## Install
 
