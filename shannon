@@ -11,7 +11,6 @@ module.
 """
 
 __author__ = 'Önder Kartal'
-__version__ = '0.2.4'
 
 import argparse
 import collections
@@ -286,49 +285,40 @@ def impute(data, method='pseudocount'):
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        prog='shannon',
+        description='Command-line interface to %(prog)s.')
 
-    parser.prog = 'shannon'
+    parser.add_argument('-s', '--sequence', required=True, type=str,
+                        help='Name of sequence (chromosome or scaffold) to query in genome position file.')
 
-    parser.description = ('%(prog)s: a program to measure population diversity'
-                          ' using information-theory.')
-
-    parser.add_argument('-v', '--version', action='version',
-                        version='%(prog)s {0}'.format(__version__))
-
-    parser.add_argument('-c', '--chrom', required=True, type=str,
-                        help='''
-                        Chromosome name.
+    parser.add_argument('-m', '--metadata', metavar="URL", required=True,
+                        help='''Metadata table with one row for each genome
+                        position file in the sample. Lines starting with # are
+                        ignored. The first line is interpreted as the header.
+                        The columns "url" and "label" are mandatory for each
+                        entry.
                         ''')
 
-    parser.add_argument('-i', '--input', metavar="URL", required=True,
+    parser.add_argument('-q', '--query', metavar='"EXPRESSION"', type=str,
                         help='''
-                        A tab-separated table with metadata for each
-                        sample/record. Lines starting with # are ignored. The
-                        first line is interpreted as the header. The columns
-                        "url" and "label" are mandatory and the corresponding
-                        fields have to be non-empty for each sample.
+                        Query to select a subsample. The expression has to be in
+                        double quotes and must reference columns in the metadata
+                        table (e.g. -q "tissue == 'leaf'", -q "age >= 32").
                         ''')
 
-    parser.add_argument('-q', '--query', metavar='"STR"', type=str,
-                        help='''
-                        Query expression to select a subset of samples. The
-                        expression has to be in double quotes. Examples: "tissue ==
-                        'leaf'", "age >= 32".
-                        ''')
-
-    parser.add_argument('-g', '--groupby', metavar='STR', nargs='+', type=str,
-                        help='''
-                        The factor according to which the selected set is
-                        partitioned; has to match column names in the input
-                        metadata. One or more factors can be given, which
-                        produces a file for each combination of factors.
-                        ''')
+    # parser.add_argument('-g', '--groupby', metavar='STR', nargs='+', type=str,
+    #                     help='''
+    #                     The factor according to which the selected set is
+    #                     partitioned; has to match column names in the input
+    #                     metadata. One or more factors can be given, which
+    #                     produces a file for each combination of factors.
+    #                     ''')
 
     parser.add_argument('-o', '--output', metavar='FILE',
                         help='''
-                        Name of the output file. Only prefix and suffix is used
-                        if -g is given since many files are written.
+                        Name of the output file. If the file exists and
+                        is not empty, execution will stop.
                         ''')
 
     args = parser.parse_args()
