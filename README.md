@@ -29,8 +29,7 @@
    ```
    $ source activate shannon
    ```
-2. Run test
+2. Run help
    ```
-   $ cd tests
-   $ ./test.sh
+   $ shannon -h
    ```
