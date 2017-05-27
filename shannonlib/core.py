@@ -5,6 +5,7 @@ import collections
 import csv
 import functools
 import glob
+import io
 import logging
 import math
 import os
@@ -25,22 +26,32 @@ def divit(metadata=None, chrom=None, outfile=None, query=None, groupby=None):
     """Process the command-line arguments.
     """
 
+    if os.path.isfile(outfile) and not os.stat(outfile).st_size == 0:
+        msg = "-- Stopped!\n-- Output file exists and is not empty."
+        sys.exit(msg)
+
+    meta = metadata.read()
+
     try:
-        with open(metadata, 'r') as csvfile:
-            dialect = csv.Sniffer().sniff(csvfile.read(1024))
-            sep = dialect.delimiter
-    except csv.Error:
-        sep = '\t'
-    except FileNotFoundError as e:
-        print(e)
-        sys.exit(1)
+        population = pd.read_csv(io.StringIO(meta), comment='#', header=0)
+        _ = population['url']
+        _ = population['label']
+    except KeyError:
+        try:
+            population = pd.read_csv(io.StringIO(meta), comment='#', header=0, sep='\t')
+            _ = population['url']
+            _ = population['label']
+        except KeyError:
+            msg = ('-- Stopped!\n'
+                   '-- Could not parse metadata.\n'
+                   '-- 1. Ensure that file is tab- or comma-separated\n'
+                   '-- 2. Ensure that columns "url" and "label" are present')
+            sys.exit(msg)
 
-    population = pd.read_csv(metadata, comment='#', sep=sep, header=0)
-
-    if query:
+    if query is not None:
         population.query(query, inplace=True)
 
-    if groupby:
+    if groupby is not None:
         metapopulation = population.groupby(groupby)
         for key, subpop in metapopulation:
             filename = groupname(by=groupby, name=key, fname=outfile)

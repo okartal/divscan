@@ -11,6 +11,7 @@ from shannonlib.core import divit
 
 
 def run_divit(args):
+
     metadata = args.metadata
     chrom = args.sequence
     query = None
@@ -24,7 +25,7 @@ def run_divit(args):
 
 
 if __name__ == '__main__':
-    
+
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers()
 
@@ -54,10 +55,11 @@ if __name__ == '__main__':
         help='''
         Query chromosome or scaffold name in genome position files.
         ''')
+
     parser_divit.add_argument(
         '-m',
         '--metadata',
-        metavar="URL",
+        type=argparse.FileType('r'),
         required=True,
         help='''
         Metadata table with one row for each genome
@@ -66,10 +68,12 @@ if __name__ == '__main__':
         The columns "url" and "label" are mandatory for each
         entry.
         ''')
+
     parser_divit.add_argument(
         '-o',
         '--output',
         metavar='FILE',
+        required=True,
         help='''
         Name of the output file. If the file exists and
         is not empty, execution will stop.
@@ -94,9 +98,4 @@ if __name__ == '__main__':
     #                     ''')
 
     args = parser.parse_args()
-
-    if os.path.isfile(args.output) and not os.stat(args.output).st_size == 0:
-        msg = "\nExecution stops! Output file exists and is not empty!\n"
-        sys.exit(msg)
-
     args.func(args)
