@@ -4,22 +4,56 @@
 __author__ = 'Önder Kartal'
 
 import argparse
+import io
 import os
 import sys
 
-from shannonlib.core import divit
+import pandas as pd
+
+from shannonlib.core import divergence
 
 
-def run_divit(args):
+def run_divergence(args):
 
     metadata = args.metadata
     chrom = args.sequence
+    outfile = args.output
     query = None
     groupby = None
-    outfile = args.output
 
-    divit(metadata=metadata, chrom=chrom,
-          outfile=outfile, query=query, groupby=groupby)
+    if os.path.isfile(outfile) and not os.stat(outfile).st_size == 0:
+        msg = "-- Stopped!\n-- Output file exists and is not empty."
+        sys.exit(msg)
+
+    meta = metadata.read()
+
+    try:
+        population = pd.read_csv(io.StringIO(meta), comment='#', header=0)
+        _ = population['url']
+        _ = population['label']
+    except KeyError:
+        try:
+            population = pd.read_csv(io.StringIO(meta), comment='#', header=0, sep='\t')
+            _ = population['url']
+            _ = population['label']
+        except KeyError:
+            msg = ('-- Stopped!\n'
+                   '-- Could not parse metadata.\n'
+                   '-- 1. Ensure that file is tab- or comma-separated\n'
+                   '-- 2. Ensure that columns "url" and "label" are present')
+            sys.exit(msg)
+
+    if query is not None:
+        population.query(query, inplace=True)
+
+    if groupby is not None:
+        metapopulation = population.groupby(groupby)
+        for key, subpop in metapopulation:
+            filename = groupname(by=groupby, name=key, fname=outfile)
+            divergence(pop=subpop, chrom=chrom, filename=filename)
+    else:
+        filename = outfile
+        divergence(pop=population, chrom=chrom, filename=filename)
 
     return None
 
@@ -39,37 +73,36 @@ if __name__ == '__main__':
     # segment
     parser_segment = subparsers.add_parser('segment')
 
-    # divit
-    parser_divit = subparsers.add_parser(
-        'divit',
-        help='Total JS Divergence.',
-        description='''
-        Within-group JS Divergence for the whole sample.
-        ''')
+    # divergence
+    parser_divergence = subparsers.add_parser('divergence')
+    parser_divergence.help = 'JS Divergence for each position.'
+    parser_divergence.description = parser_divergence.help
+    parser_divergence.set_defaults(func=run_divergence)
 
-    parser_divit.add_argument(
+    parser_divergence.add_argument(
         '-s',
         '--sequence',
+        metavar='ID',        
         required=True,
         type=str,
         help='''
-        Query chromosome or scaffold name in genome position files.
+        ID of query chromosome or scaffold from the genome position file.
         ''')
 
-    parser_divit.add_argument(
+    parser_divergence.add_argument(
         '-m',
         '--metadata',
+        metavar='FILE',        
         type=argparse.FileType('r'),
         required=True,
         help='''
         Metadata table with one row for each genome
         position file in the sample. Lines starting with  # are
-        ignored. The first line is interpreted as the header.
-        The columns "url" and "label" are mandatory for each
-        entry.
+        ignored. The first line without '#' is interpreted as the header.
+        The columns "url" and "label" are required.
         ''')
 
-    parser_divit.add_argument(
+    parser_divergence.add_argument(
         '-o',
         '--output',
         metavar='FILE',
@@ -79,9 +112,8 @@ if __name__ == '__main__':
         is not empty, execution will stop.
         ''')
 
-    parser_divit.set_defaults(func=run_divit)
 
-# parser_divit.add_argument('-q', '--query', metavar='"EXPRESSION"',
+# parser_divergence.add_argument('-q', '--query', metavar='"EXPRESSION"',
     # type=str,
     #                           help='''
     #                     Query to select a subsample. The expression has to be in

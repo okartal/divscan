@@ -22,46 +22,6 @@ logging.basicConfig(format="=== %(levelname)s === %(asctime)s === %(message)s",
 LOG2E = np.log2(math.e)
 
 
-def divit(metadata=None, chrom=None, outfile=None, query=None, groupby=None):
-    """Process the command-line arguments.
-    """
-
-    if os.path.isfile(outfile) and not os.stat(outfile).st_size == 0:
-        msg = "-- Stopped!\n-- Output file exists and is not empty."
-        sys.exit(msg)
-
-    meta = metadata.read()
-
-    try:
-        population = pd.read_csv(io.StringIO(meta), comment='#', header=0)
-        _ = population['url']
-        _ = population['label']
-    except KeyError:
-        try:
-            population = pd.read_csv(io.StringIO(meta), comment='#', header=0, sep='\t')
-            _ = population['url']
-            _ = population['label']
-        except KeyError:
-            msg = ('-- Stopped!\n'
-                   '-- Could not parse metadata.\n'
-                   '-- 1. Ensure that file is tab- or comma-separated\n'
-                   '-- 2. Ensure that columns "url" and "label" are present')
-            sys.exit(msg)
-
-    if query is not None:
-        population.query(query, inplace=True)
-
-    if groupby is not None:
-        metapopulation = population.groupby(groupby)
-        for key, subpop in metapopulation:
-            filename = groupname(by=groupby, name=key, fname=outfile)
-            divergence(pop=subpop, chrom=chrom, filename=filename)
-    else:
-        filename = outfile
-        divergence(pop=population, chrom=chrom, filename=filename)
-    pass
-
-
 def divergence(pop=None, chrom=None, filename=None, imputation=False,
                method='jsd', filetype='bismark_coverage'):
     """Computes within-group divergence for population.
