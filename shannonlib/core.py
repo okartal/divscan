@@ -16,10 +16,14 @@ import numexpr as ne
 import numpy as np
 import pandas as pd
 
+import shannonlib.constants as constant
+
+from .estimators import shannon_entropy
+from .preprocessing import impute
+from .utils import groupname, supremum_numsites, supremum_position
+
 logging.basicConfig(format="=== %(levelname)s === %(asctime)s === %(message)s",
                     level=logging.DEBUG, datefmt='%Y-%m-%d %H:%M:%S')
-
-LOG2E = np.log2(math.e)
 
 
 def divergence(pop=None, chrom=None, filename=None, imputation=False,
@@ -50,28 +54,29 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
         alphabet = ['E', 'C']
         coordinate = [column[i] for i in range(3)]
 
-    sup_chrom = chrom_supremum(input_files, chrom)
-    if sup_chrom == None:
+    sup_position = supremum_position(input_files, chrom)
+
+    if sup_position == None:
         logging.info("Skipping because chromosome is missing.")
         return False
 
-    sup_nsites = nsites_supremum(input_files, chrom)
+    sup_numsites = supremum_numsites(input_files, chrom)
 
-    if sup_nsites == None or sup_nsites == 0:
+    if sup_numsites == None or sup_numsites == 0:
         logging.info("Skipping because there are no entries.")
         return False
 
-    stepsize = math.ceil(sup_chrom / sup_nsites * load)
+    stepsize = math.ceil(sup_position / sup_numsites * load)
 
-    if stepsize < sup_chrom:
+    if stepsize < sup_position:
         step = stepsize
         print("step size:", step)
     else:
-        step = sup_chrom
+        step = sup_position
         print("step size:", step, "(max. for contig {0})".format(chrom))
 
-    pos_start = list(range(0, sup_chrom, step + 1))
-    pos_end = list(range(step, sup_chrom, step + 1)) + [sup_chrom]
+    pos_start = list(range(0, sup_position, step + 1))
+    pos_end = list(range(step, sup_position, step + 1)) + [sup_position]
     regions = zip(pos_start, pos_end)
 
     # Print step size and start the calculation for each interval
@@ -123,14 +128,17 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
                 data_unit.shape[1],
                 data_feature.shape[1])
             # JSD terms
-            mix_entropy = entropy(data_feature.values)
+            mix_entropy = shannon_entropy(data_feature.values)
             avg_entropy = np.average(
-                entropy(counts, axis=2), weights=data_unit.fillna(0), axis=1)
+                shannon_entropy(counts, axis=2),
+                weights=data_unit.fillna(0),
+                axis=1)
             # output
             div = data_feature
-            div.insert(0, 'JSD_bit_', LOG2E * (mix_entropy - avg_entropy))
+            div.insert(0, 'JSD_bit_', constant.LOG2E *
+                       (mix_entropy - avg_entropy))
             div.insert(1, 'sample size', sample_size[pass_filter])
-            div.insert(2, 'HMIX_bit_', LOG2E * mix_entropy)
+            div.insert(2, 'HMIX_bit_', constant.LOG2E * mix_entropy)
             # div['members'] = (data_unit.apply(lambda x: ','.join(x.dropna().index), axis=1))
 
             if not os.path.isfile(filename):
@@ -147,96 +155,3 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
             continue
 
     return None
-
-
-def groupname(by=None, name=None, fname=None):
-    """Return filename of the subgroup.
-    """
-
-    # ensure that name is a tuple of strings
-    name = tuple(str(key) for key in name)
-
-    group = '_and_'.join('_'.join(items) for items in zip(by, name))
-
-    old_suffix = fname.split('.')[-1]
-
-    new_suffix = '.'.join([group, old_suffix])
-
-    return fname.replace(old_suffix, new_suffix)
-
-
-def chrom_supremum(tabixfiles, chrom):
-    """Return the least upper bound for the chrom end coordinate.
-    """
-
-    end_coordinate = list()
-
-    for f in tabixfiles:
-        tabix = subprocess.Popen(["tabix", f, chrom], stdout=subprocess.PIPE)
-        tail = subprocess.Popen(
-            ["tail", "-1"], stdin=tabix.stdout, stdout=subprocess.PIPE)
-        cut = subprocess.Popen(
-            ["cut", "-f3"], stdin=tail.stdout, stdout=subprocess.PIPE)
-        # Allow first process to receive a SIGPIPE if process 2 exits.
-        tabix.stdout.close()
-        try:
-            base_position = int(cut.communicate()[0])
-            end_coordinate.append(base_position)
-        except ValueError:
-            continue
-
-    try:
-        out = np.max(end_coordinate)
-    except ValueError:
-        out = None
-
-    return out
-
-
-def nsites_supremum(tabixfiles, chrom):
-    '''Return the least upper bound for the number of covered sites.
-    '''
-
-    sites = list()
-
-    for f in tabixfiles:
-        tabix = subprocess.Popen(["tabix", f, chrom], stdout=subprocess.PIPE)
-        wcl = subprocess.Popen(
-            ["wc", "-l"], stdin=tabix.stdout, stdout=subprocess.PIPE)
-        tabix.stdout.close()  # Allow tabix to receive a SIGPIPE if wcl exits.
-        try:
-            site_count = int(wcl.communicate()[0])
-            sites.append(site_count)
-        except ValueError:
-            continue
-
-    try:
-        out = np.max(sites)
-    except ValueError:
-        out = None
-
-    return out
-
-
-def entropy(counts, axis=1, method='mle'):
-    """Entropy (in nat) of feature frequency profile.
-    """
-
-    expression = "sum(where(pr > 0, -pr * log(pr), 0), axis={})".format(axis)
-
-    if method == 'mle':
-        '''Maximum-likelihood/plug-in/non-parametric estimator
-        '''
-        sumCounts = counts.sum(axis)[..., np.newaxis]
-        pr = counts / sumCounts
-        result = ne.evaluate(expression)
-
-    return result
-
-
-def impute(data, method='pseudocount'):
-    if method == 'pseudocount':
-        # given by the parameters of a uninformative Dirichlet prior on the
-        # probabilities
-        value = 1
-    return value
