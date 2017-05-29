@@ -71,10 +71,10 @@ if __name__ == '__main__':
     parser_cluster = subparsers.add_parser('cluster')
 
     # segment
-    parser_segment = subparsers.add_parser('segment')
+    parser_segment = subparsers.add_parser('seg')
 
     # divergence
-    parser_divergence = subparsers.add_parser('divergence')
+    parser_divergence = subparsers.add_parser('div')
     parser_divergence.help = 'JS Divergence for each position.'
     parser_divergence.description = parser_divergence.help
     parser_divergence.set_defaults(func=run_divergence)
