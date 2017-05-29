@@ -6,7 +6,6 @@ import csv
 import functools
 import glob
 import io
-import logging
 import math
 import os
 import subprocess
@@ -20,10 +19,7 @@ import shannonlib.constants as constant
 
 from .estimators import shannon_entropy
 from .preprocessing import impute
-from .utils import groupname, supremum_numsites, supremum_position
-
-logging.basicConfig(format="=== %(levelname)s === %(asctime)s === %(message)s",
-                    level=logging.DEBUG, datefmt='%Y-%m-%d %H:%M:%S')
+from .utils import get_regions, groupname
 
 
 def divergence(pop=None, chrom=None, filename=None, imputation=False,
@@ -54,38 +50,16 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
         alphabet = ['E', 'C']
         coordinate = [column[i] for i in range(3)]
 
-    sup_position = supremum_position(input_files, chrom)
-
-    if sup_position == None:
-        logging.info("Skipping because chromosome is missing.")
-        return False
-
-    sup_numsites = supremum_numsites(input_files, chrom)
-
-    if sup_numsites == None or sup_numsites == 0:
-        logging.info("Skipping because there are no entries.")
-        return False
-
-    stepsize = math.ceil(sup_position / sup_numsites * load)
-
-    if stepsize < sup_position:
-        step = stepsize
-        print("step size:", step)
-    else:
-        step = sup_position
-        print("step size:", step, "(max. for contig {0})".format(chrom))
-
-    pos_start = list(range(0, sup_position, step + 1))
-    pos_end = list(range(step, sup_position, step + 1)) + [sup_position]
-    regions = zip(pos_start, pos_end)
+    stepsize, regions = get_regions(input_files, chrom=chrom, exp_numsites=load)
 
     # Print step size and start the calculation for each interval
+    print('stepsize: {}'.format(stepsize))
 
     for interval in regions:
 
         # INPUT
 
-        region = chrom + ':{0}-{1}'.format(*interval)
+        region = '{0}:{1}-{2}'.format(*interval)
 
         tabix_query = (subprocess.Popen(['tabix', f, region],
                                         stdout=subprocess.PIPE,

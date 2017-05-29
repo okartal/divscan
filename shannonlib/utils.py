@@ -2,9 +2,50 @@
 """Utility functions.
 """
 
+import logging
+import math
 import subprocess
 
 import numpy as np
+
+
+logging.basicConfig(format="=== %(levelname)s === %(asctime)s === %(message)s",
+                    level=logging.DEBUG, datefmt='%Y-%m-%d %H:%M:%S')
+
+
+def get_regions(tabixfiles, chrom=None, exp_numsites=1e3):
+    """Get stepsize and list of regions for tabix-indexed files.
+    """
+
+    sup_position = supremum_position(tabixfiles, chrom)
+
+    if sup_position == None:
+        logging.info("Skipping because chromosome is missing.")
+        return False
+
+    sup_numsites = supremum_numsites(tabixfiles, chrom)
+
+    if sup_numsites == None or sup_numsites == 0:
+        logging.info("Skipping because there are no entries.")
+        return False
+
+    step = math.ceil(sup_position / sup_numsites * exp_numsites)
+
+    if step < sup_position:
+        stepsize = step
+    else:
+        stepsize = sup_position
+
+    pos_start = list(
+        range(0, sup_position, stepsize + 1))
+    pos_end = list(
+        range(stepsize, sup_position, stepsize + 1)) + [sup_position]
+
+    assert len(pos_start) == len(pos_end)
+
+    regions = zip(chrom * len(pos_start), pos_start, pos_end)
+
+    return stepsize, regions
 
 
 def supremum_numsites(tabixfiles, chrom):
