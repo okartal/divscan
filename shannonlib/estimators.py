@@ -1,4 +1,6 @@
-# estimators.py
+# -*- coding:utf-8 -*-
+# # estimators.py
+
 """Estimators of information-theoretic quantities.
 """
 

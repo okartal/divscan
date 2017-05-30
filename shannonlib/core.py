@@ -1,3 +1,6 @@
+# -*- coding:utf-8 -*-
+# core.py
+
 """Core functions.
 """
 
@@ -18,8 +21,8 @@ import pandas as pd
 import shannonlib.constants as constant
 
 from .estimators import shannon_entropy
-from .preprocessing import impute
-from .utils import get_regions, groupname
+from .preprocessing import impute, groupname
+from .gpf_utils import get_regions, get_data
 
 
 def divergence(pop=None, chrom=None, filename=None, imputation=False,
@@ -28,80 +31,46 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
     """
 
     # parameters
-    # load is measured in expected number of sites in the queried region
-    min_sample_size = 2
+    min_samplesize = 2
     min_count = 3
-    load = 1e5
+    load = 1e3
 
     input_files = pop['url']
-
     labels = pop['label']
+    data_columns = [[(4, 'count_mC', np.uint8), (5, 'count_C', np.uint8)]]
 
-    column = collections.OrderedDict()
+    regions_pct, regions = get_regions(input_files, chrom=chrom, exp_numsites=load)
 
-    if filetype == 'bismark_coverage':
-        column[0] = '#chrom'
-        column[1] = 'start'
-        column[2] = 'end'
-        column[4] = 'E'  # my single letter code for methylated C
-        column[5] = 'C'
-        types = [str, np.int64, np.int64, np.int32, np.int32]
-        dtype = dict(zip(column.values(), types))
-        alphabet = ['E', 'C']
-        coordinate = [column[i] for i in range(3)]
+    regions_data = get_data(input_files, labels=labels, data_columns=data_columns, regions=regions)
 
-    stepsize, regions = get_regions(input_files, chrom=chrom, exp_numsites=load)
+    for progress, indata in zip(regions_pct, regions_data):
 
-    # Print step size and start the calculation for each interval
-    print('stepsize: {}'.format(stepsize))
-
-    for interval in regions:
-
-        # INPUT
-
-        region = '{0}:{1}-{2}'.format(*interval)
-
-        tabix_query = (subprocess.Popen(['tabix', f, region],
-                                        stdout=subprocess.PIPE,
-                                        universal_newlines=True)
-                       for f in input_files)
-
-        dataframes = (pd.read_table(query.stdout, comment='#', header=None,
-                                    usecols=list(column.keys()),
-                                    names=list(column.values()), dtype=dtype,
-                                    index_col=[0, 1, 2])
-                      for query in tabix_query)
-
-        indata = pd.concat(dataframes, axis=1, keys=labels,
-                           names=['sample', 'feature'])
-
-        # PROCESS
-        print('processing', region, '...')
+        if indata.empty:
+            print('...{:>5} % (skipped empty region)'.format(progress))
+            continue
 
         if imputation:
             impute_value = impute(indata, method='pseudocount')
             indata.fillna(impute_value, inplace=True)
 
+        # preprocess data
         count_per_unit = indata.sum(axis=1, level='sample')
+        samplesize = count_per_unit.notnull().sum(axis=1)
+        count_filter = (count_per_unit >= min_count).any(axis=1)
+        samplesize_filter = (samplesize >= min_samplesize)
+        combined_filter = (count_filter & samplesize_filter)
 
-        sample_size = count_per_unit.notnull().sum(axis=1)
-
-        # filter
-        pass_count = (count_per_unit >= min_count).any(axis=1)
-        pass_sample_size = (sample_size >= min_sample_size)
-        pass_filter = (pass_count & pass_sample_size)
-
-        data = indata[pass_filter]
+        data = indata[combined_filter]
 
         if not data.empty:
-            # data transformations
-            data_unit = count_per_unit[pass_filter]
+            # extract data
+            data_unit = count_per_unit[combined_filter]
             data_feature = (data.sum(axis=1, level='feature').astype(np.int32))
             counts = data.values.reshape(
                 data_unit.shape[0],
                 data_unit.shape[1],
                 data_feature.shape[1])
-            # JSD terms
+            # estimate JSD
             mix_entropy = shannon_entropy(data_feature.values)
             avg_entropy = np.average(
                 shannon_entropy(counts, axis=2),
@@ -111,7 +80,7 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
             div = data_feature
             div.insert(0, 'JSD_bit_', constant.LOG2E *
                        (mix_entropy - avg_entropy))
-            div.insert(1, 'sample size', sample_size[pass_filter])
+            div.insert(1, 'sample size', samplesize[combined_filter])
             div.insert(2, 'HMIX_bit_', constant.LOG2E * mix_entropy)
             # div['members'] = (data_unit.apply(lambda x: ','.join(x.dropna().index), axis=1))
 
@@ -126,6 +95,9 @@ def divergence(pop=None, chrom=None, filename=None, imputation=False,
              .round({'JSD_bit_': 3, 'HMIX_bit_': 3})
              .to_csv(filename, header=header, sep='\t', index=True, mode='a'))
         else:
+            print('...{:>5} % (skipped region not meeting QC)'.format(progress))
             continue
+
+        print('...{:>5} %'.format(progress))
 
     return None
