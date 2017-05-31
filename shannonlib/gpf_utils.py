@@ -60,7 +60,7 @@ def get_regions(tabixfiles, chrom=None, exp_numsites=1e3):
 
 
 def get_data(files, labels=None, data_columns=None, regions=None, join='outer',
-               preset='bed'):
+             preset='bed'):
     """Combines tabix-indexed genome position files.
     """
 
@@ -184,6 +184,3 @@ def supremum_position(tabixfiles, chrom):
         out = None
 
     return out
-
-
-

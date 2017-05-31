@@ -33,13 +33,14 @@ def run_divergence(args):
         _ = population['label']
     except KeyError:
         try:
-            population = pd.read_csv(io.StringIO(meta), comment='#', header=0, sep='\t')
+            population = pd.read_csv(io.StringIO(
+                meta), comment='#', header=0, sep='\t')
             _ = population['url']
             _ = population['label']
         except KeyError:
             msg = ('-- Stopped!\n'
                    '-- Could not parse metadata.\n'
-                   '-- 1. Ensure that file is tab- or comma-separated\n'
+                   '-- 1. Ensure that fields are tab- or comma-separated\n'
                    '-- 2. Ensure that columns "url" and "label" are present')
             sys.exit(msg)
 
@@ -52,8 +53,9 @@ def run_divergence(args):
             filename = groupname(by=groupby, name=key, fname=outfile)
             divergence(pop=subpop, chrom=chrom, filename=filename)
     else:
-        filename = outfile
-        divergence(pop=population, chrom=chrom, filename=filename)
+        print('processing sequence {} ...'.format(chrom))
+        divergence(population, chrom=chrom, outfile=outfile,
+                   chunksize=args.chunksize)
 
     return None
 
@@ -75,31 +77,34 @@ if __name__ == '__main__':
 
     # divergence
     parser_divergence = subparsers.add_parser('div')
+
+    parser_divergence.set_defaults(func=run_divergence)
     parser_divergence.help = 'JS Divergence for each position.'
     parser_divergence.description = parser_divergence.help
-    parser_divergence.set_defaults(func=run_divergence)
 
     parser_divergence.add_argument(
-        '-s',
-        '--sequence',
-        metavar='ID',        
-        required=True,
-        type=str,
+        '-c',
+        '--chunksize',
+        metavar='INT',
+        default=1e4,
+        type=int,
         help='''
-        ID of query chromosome or scaffold from the genome position file.
+        Expected number of sites that are processed at the same time in memory.
+        Higher numbers lead to faster but also more memory-hungry computations.
+        (default: %(default)d)
         ''')
 
     parser_divergence.add_argument(
         '-m',
         '--metadata',
-        metavar='FILE',        
+        metavar='FILE',
         type=argparse.FileType('r'),
         required=True,
         help='''
-        Metadata table with one row for each genome
-        position file in the sample. Lines starting with  # are
-        ignored. The first line without '#' is interpreted as the header.
-        The columns "url" and "label" are required.
+        Metadata for each genome position file. Lines starting with # are
+        ignored and the first non-comment line must be the header. The headers
+        "url" and "label" are required. Use a dash (-) as FILE if you pipe it
+        from stdin.
         ''')
 
     parser_divergence.add_argument(
@@ -108,11 +113,19 @@ if __name__ == '__main__':
         metavar='FILE',
         required=True,
         help='''
-        Name of the output file. If the file exists and
-        is not empty, execution will stop.
+        Name of the output file. If the file exists and is not empty, execution
+        will stop.
         ''')
 
-
+    parser_divergence.add_argument(
+        '-s',
+        '--sequence',
+        metavar='ID',
+        required=True,
+        type=str,
+        help='''
+        ID of query chromosome or scaffold from the genome position file.
+        ''')
 # parser_divergence.add_argument('-q', '--query', metavar='"EXPRESSION"',
     # type=str,
     #                           help='''
