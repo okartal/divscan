@@ -105,27 +105,45 @@ if __name__ == '__main__':
         ignored and the first non-comment line must be the header. The headers
         "url" and "label" are required. Use a dash (-) as FILE if you pipe it
         from stdin.
-        ''')
-
+        '''
+    )
     parser_divergence.add_argument(
         '-o',
         '--output',
         metavar='FILE',
         required=True,
-        help='''
-        Name of the output file. If the file exists and is not empty, execution
-        will stop.
-        ''')
-
+        help='Output filename'
+    )
     parser_divergence.add_argument(
         '-s',
         '--sequence',
         metavar='ID',
         required=True,
         type=str,
-        help='''
-        ID of query chromosome or scaffold from the genome position file.
-        ''')
+        help='Sequence (chromosome/scaffold) in genome position file'
+    )
+    parser_divergence.add_argument(
+        '--dtype',
+        required=True,
+        choices=['count', 'prob'],
+        help='Type of data in genome position files'
+    )
+    parser_divergence.add_argument(
+        '--dcols',
+        metavar='INT',
+        nargs='+',
+        required=True,
+        type=int,
+        help='Data columns in genome position files'
+    )
+    parser_divergence.add_argument(
+        '--dnames',
+        metavar='STR',
+        nargs='+',
+        required=True,
+        type=str,
+        help='Names of data columns'
+    )
 # parser_divergence.add_argument('-q', '--query', metavar='"EXPRESSION"',
     # type=str,
     #                           help='''
