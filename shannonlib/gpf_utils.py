@@ -67,7 +67,7 @@ def get_data(files, labels=None, data_columns=None, regions=None, join='outer',
     # check input arguments
 
     if labels is None:
-        keys = ['sample_{}'.format(pos + 1) for pos, _ in enumerate(files)]
+        keys = ['unit_{}'.format(pos + 1) for pos, _ in enumerate(files)]
     elif len(labels) == len(files):
         keys = labels
     else:
@@ -102,7 +102,7 @@ def get_data(files, labels=None, data_columns=None, regions=None, join='outer',
         pass
 
     # output columns
-    names = ['sample', 'feature']
+    names = ['sampling_unit', 'feature']
     columns = [index + cols for cols in data_columns]
 
     for region in regions:
