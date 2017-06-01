@@ -74,7 +74,6 @@ def get_data(files, labels=None, data_columns=None, regions=None, join='outer',
         raise InputMismatchError('Number of files and labels must match!')
 
     if data_columns is None:
-        # FIXME: assume that all columns are taken and are of type float
         raise MissingInputError(
             'The list of data_colums must have at least one entry!')
     elif len(data_columns) == len(files):

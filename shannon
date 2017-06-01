@@ -9,34 +9,28 @@ import os
 import sys
 
 import pandas as pd
+import numpy as np
 
 from shannonlib.core import divergence
 
 
 def run_divergence(args):
 
-    metadata = args.metadata
-    chrom = args.sequence
-    outfile = args.output
-    query = None
-    groupby = None
-
-    if os.path.isfile(outfile) and not os.stat(outfile).st_size == 0:
+    if os.path.isfile(args.output) and not os.stat(args.output).st_size == 0:
         msg = "-- Stopped!\n-- Output file exists and is not empty."
         sys.exit(msg)
 
-    meta = metadata.read()
+    meta = io.StringIO(args.metadata.read())
 
     try:
-        population = pd.read_csv(io.StringIO(meta), comment='#', header=0)
-        _ = population['url']
-        _ = population['label']
+        sample = pd.read_csv(meta, comment='#', header=0)
+        _ = sample['url']
+        _ = sample['label']
     except KeyError:
         try:
-            population = pd.read_csv(io.StringIO(
-                meta), comment='#', header=0, sep='\t')
-            _ = population['url']
-            _ = population['label']
+            sample = pd.read_csv(meta, comment='#', header=0, sep='\t')
+            _ = sample['url']
+            _ = sample['label']
         except KeyError:
             msg = ('-- Stopped!\n'
                    '-- Could not parse metadata.\n'
@@ -44,18 +38,28 @@ def run_divergence(args):
                    '-- 2. Ensure that columns "url" and "label" are present')
             sys.exit(msg)
 
-    if query is not None:
-        population.query(query, inplace=True)
+    # GPF data columns
+    try:
+        assert(len(args.dcols) == len(args.dnames))
+    except AssertionError:
+        msg = ('-- Stopped!\n'
+               '-- Length of --dcols and --dnames must match')
+        sys.exit(msg)
 
-    if groupby is not None:
-        metapopulation = population.groupby(groupby)
-        for key, subpop in metapopulation:
-            filename = groupname(by=groupby, name=key, fname=outfile)
-            divergence(pop=subpop, chrom=chrom, filename=filename)
-    else:
-        print('processing sequence {} ...'.format(chrom))
-        divergence(population, chrom=chrom, outfile=outfile,
-                   chunksize=args.chunksize)
+    dtypes = [float if args.prob else int] * len(args.dcols)
+    dcols = [col - 1 for col in args.dcols]
+    gpf_data = [list(zip(dcols, args.dnames, dtypes))]
+
+    # if groupby is not None:
+    #     subsample_family = sample.groupby(groupby)
+    #     for key, subsample in subsample_family:
+    #         filename = groupname(by=groupby, name=key, fname=args.output)
+    #         divergence(subsample, chrom=args.sequence, data_columns=gpf_data,
+    #                    outfile=filename, chunksize=args.chunksize)
+    # else:
+    print('processing sequence {} ...'.format(args.sequence))
+    divergence(sample, chrom=args.sequence, data_columns=gpf_data,
+               outfile=args.output, chunksize=args.chunksize)
 
     return None
 
@@ -83,17 +87,21 @@ if __name__ == '__main__':
     parser_divergence.description = parser_divergence.help
 
     parser_divergence.add_argument(
+        '--prob',
+        action='store_true',
+        help='flag the data as probabilites (default: counts)'
+    )
+
+    parser_divergence.add_argument(
         '-c',
         '--chunksize',
         metavar='INT',
         default=1e4,
         type=int,
         help='''
-        Expected number of sites that are processed at the same time in memory.
-        Higher numbers lead to faster but also more memory-hungry computations.
-        (default: %(default)d)
-        ''')
-
+        expected number of genome positions processed in memory (default: %(default)d)
+        '''
+    )
     parser_divergence.add_argument(
         '-m',
         '--metadata',
@@ -101,18 +109,16 @@ if __name__ == '__main__':
         type=argparse.FileType('r'),
         required=True,
         help='''
-        Metadata for each genome position file. Lines starting with # are
-        ignored and the first non-comment line must be the header. The headers
-        "url" and "label" are required. Use a dash (-) as FILE if you pipe it
-        from stdin.
+        table (.csv or .tsv) with metadata; lines starting with # are ignored;
+        first non-comment line must be header; "url" and "label" headers are
+        required; use dash (-) instead of FILE if metadata is piped from stdin.
         '''
     )
     parser_divergence.add_argument(
         '-o',
         '--output',
         metavar='FILE',
-        required=True,
-        help='Output filename'
+        required=True
     )
     parser_divergence.add_argument(
         '-s',
@@ -123,18 +129,12 @@ if __name__ == '__main__':
         help='Sequence (chromosome/scaffold) in genome position file'
     )
     parser_divergence.add_argument(
-        '--dtype',
-        required=True,
-        choices=['count', 'prob'],
-        help='Type of data in genome position files'
-    )
-    parser_divergence.add_argument(
         '--dcols',
         metavar='INT',
         nargs='+',
         required=True,
         type=int,
-        help='Data columns in genome position files'
+        help='positions of data columns in genome position files'
     )
     parser_divergence.add_argument(
         '--dnames',
@@ -142,15 +142,8 @@ if __name__ == '__main__':
         nargs='+',
         required=True,
         type=str,
-        help='Names of data columns'
+        help='names of data columns in genome position files (same order as --dcols!)'
     )
-# parser_divergence.add_argument('-q', '--query', metavar='"EXPRESSION"',
-    # type=str,
-    #                           help='''
-    #                     Query to select a subsample. The expression has to be in
-    #                     double quotes and must reference columns in the metadata
-    #                     table (e.g. -q "tissue == 'leaf'", -q "age >= 32").
-    #                     ''')
 
     # parser.add_argument('-g', '--groupby', metavar='STR', nargs='+', type=str,
     #                     help='''

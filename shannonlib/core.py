@@ -24,11 +24,9 @@ import shannonlib.gpf_utils as gpf
 from .estimators import shannon_entropy
 
 
-def divergence(sample, chrom=None, outfile=None, chunksize=1e3):
+def divergence(sample, chrom=None, data_columns=None, outfile=None, chunksize=None):
     """Computes within-group divergence for population.
     """
-
-    data_columns = [[(4, 'count_mC', np.uint8), (5, 'count_C', np.uint8)]]
 
     regions_pct, regions = gpf.get_regions(
         sample['url'], chrom=chrom, exp_numsites=chunksize)
