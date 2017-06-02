@@ -20,15 +20,15 @@ def run_divergence(args):
         msg = "-- Stopped!\n-- Output file exists and is not empty."
         sys.exit(msg)
 
-    meta = io.StringIO(args.metadata.read())
+    meta = args.metadata.read()
 
     try:
-        sample = pd.read_csv(meta, comment='#', header=0)
+        sample = pd.read_csv(io.StringIO(meta), comment='#', header=0)
         _ = sample['url']
         _ = sample['label']
     except KeyError:
         try:
-            sample = pd.read_csv(meta, comment='#', header=0, sep='\t')
+            sample = pd.read_csv(io.StringIO(meta), comment='#', header=0, sep='\t')
             _ = sample['url']
             _ = sample['label']
         except KeyError:
