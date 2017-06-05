@@ -4,23 +4,10 @@
 """Core functions.
 """
 
-import collections
-import csv
-import functools
-import glob
-import io
-import math
 import os
-import subprocess
-import sys
 
-import numexpr as ne
-import numpy as np
-import pandas as pd
-
+import shannonlib.estimators as est
 import shannonlib.gpf_utils as gpf
-
-from .estimators import js_divergence
 
 
 def divergence(sample, chrom=None, data_columns=None, outfile=None, chunksize=None):
@@ -39,7 +26,7 @@ def divergence(sample, chrom=None, data_columns=None, outfile=None, chunksize=No
             print('...{:>5} % (skipped empty region)'.format(progress))
             continue
 
-        div = js_divergence(data)
+        div = est.js_divergence(data)
 
         if div.empty:
             continue

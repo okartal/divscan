@@ -9,7 +9,6 @@ import os
 import sys
 
 import pandas as pd
-import numpy as np
 
 from shannonlib.core import divergence
 
