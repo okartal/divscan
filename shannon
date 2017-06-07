@@ -27,7 +27,8 @@ def run_divergence(args):
         _ = sample['label']
     except KeyError:
         try:
-            sample = pd.read_csv(io.StringIO(meta), comment='#', header=0, sep='\t')
+            sample = pd.read_csv(io.StringIO(
+                meta), comment='#', header=0, sep='\t')
             _ = sample['url']
             _ = sample['label']
         except KeyError:
@@ -58,7 +59,7 @@ def run_divergence(args):
     # else:
     print('processing sequence {} ...'.format(args.sequence))
     divergence(sample, chrom=args.sequence, data_columns=gpf_data,
-               outfile=args.output, chunksize=args.chunksize)
+               outfile=args.output, chunksize=args.chunk)
 
     return None
 
@@ -79,70 +80,47 @@ if __name__ == '__main__':
     parser_segment = subparsers.add_parser('seg')
 
     # divergence
-    parser_divergence = subparsers.add_parser('div')
+    parser_div = subparsers.add_parser(
+        'div', formatter_class=argparse.RawTextHelpFormatter)
 
-    parser_divergence.set_defaults(func=run_divergence)
-    parser_divergence.help = 'JS Divergence for each position.'
-    parser_divergence.description = parser_divergence.help
+    parser_div.set_defaults(func=run_divergence)
+    parser_div.help = 'JS Divergence for genome position files (GPFs).'
+    parser_div.description = parser_div.help
+    parser_div_required = parser_div.add_argument_group('required arguments')
 
-    parser_divergence.add_argument(
-        '--prob',
-        action='store_true',
-        help='flag the data as probabilites (default: counts)'
-    )
+    parser_div.add_argument(
+        '--prob', action='store_true',
+        help='indicate that data are probabilites (default: counts)')
 
-    parser_divergence.add_argument(
-        '-c',
-        '--chunksize',
-        metavar='INT',
-        default=1e4,
-        type=int,
-        help='''
-        expected number of genome positions processed in memory (default: %(default)d)
-        '''
-    )
-    parser_divergence.add_argument(
-        '-m',
-        '--metadata',
-        metavar='FILE',
-        type=argparse.FileType('r'),
-        required=True,
-        help='''
-        table (.csv or .tsv) with metadata; lines starting with # are ignored;
-        first non-comment line must be header; "url" and "label" headers are
-        required; use dash (-) instead of FILE if metadata is piped from stdin.
-        '''
-    )
-    parser_divergence.add_argument(
-        '-o',
-        '--output',
-        metavar='FILE',
-        required=True
-    )
-    parser_divergence.add_argument(
-        '-s',
-        '--sequence',
-        metavar='ID',
-        required=True,
-        type=str,
-        help='Sequence (chromosome/scaffold) in genome position file'
-    )
-    parser_divergence.add_argument(
-        '--dcols',
-        metavar='INT',
-        nargs='+',
-        required=True,
-        type=int,
-        help='positions of data columns in genome position files'
-    )
-    parser_divergence.add_argument(
-        '--dnames',
-        metavar='STR',
-        nargs='+',
-        required=True,
-        type=str,
-        help='names of data columns in genome position files (same order as --dcols!)'
-    )
+    parser_div.add_argument(
+        '--chunk', metavar='SIZE', default=1e4, type=int,
+        help=('set size of data to process in-memory (default: %(default)d)\n'
+              '- in terms of expected number of genome positions\n'
+              '- higher numbers lead to more memory-hungry, faster computations'))
+
+    parser_div_required.add_argument(
+        '-m', '--metadata', metavar='FILE', type=argparse.FileType('r'),
+        required=True, help=('metadata for GPFs\n'
+                             '- comment lines (#) are ignored\n'
+                             '- values must be comma- or tab-separated\n'
+                             '- first non-comment line must be header\n'
+                             '- "url" and "label" columns are required\n'
+                             '- if stdin is metadata use "--metadata -"'))
+
+    parser_div_required.add_argument(
+        '-o', '--output', metavar='FILE', required=True, help='output filepath')
+
+    parser_div_required.add_argument(
+        '-s', '--sequence', metavar='ID', required=True, type=str,
+        help='query sequence (chromosome/scaffold) in GPF')
+
+    parser_div_required.add_argument(
+        '-c', '--dcols', metavar='COLN', nargs='+', required=True, type=int,
+        help='column numbers (1-based) in GPFs that hold the data')
+
+    parser_div_required.add_argument(
+        '-n', '--dnames', metavar='NAME', nargs='+', required=True, type=str,
+        help='names of data columns following the order in --dcols')
 
     # parser.add_argument('-g', '--groupby', metavar='STR', nargs='+', type=str,
     #                     help='''
