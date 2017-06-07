@@ -183,3 +183,20 @@ def supremum_position(tabixfiles, chrom):
         out = None
 
     return out
+
+
+def groupby(by, metadata=None, data=None):
+    """Group merged GPF data frame by levels of a factor.
+    """
+
+    mapping = metadata.set_index('label')[by].to_dict()
+
+    return data.groupby(mapping, axis=1, level=0)
+
+
+# def js_divergence_pool(parameter_list):
+#     """
+#     """
+#     #TODO add ungrouped df to list for getting J_IT
+#     with Pool(cpu_count()) as pool:
+#         return pool.map(js_divergence, [group for key, group in groups])

@@ -26,7 +26,10 @@ def divergence(sample, chrom=None, data_columns=None, outfile=None, chunksize=No
             print('...{:>5} % (skipped empty region)'.format(progress))
             continue
 
-        div = est.js_divergence(data)
+        div = est.js_divergence(data) # this is div_it!
+        # div_subgroups = gpf.groupby('stage', metadata=sample, data=data)
+        # div_is = div_subgroups.apply(est.js_divergence) # alternatively map js_divergence to groups using multiprocessing
+        # div_st = div_it - div_is_wavg # use np.average to over subgroups using 'sample size' as weights, see https://stackoverflow.com/a/33054358/2136626
 
         if div.empty:
             continue
