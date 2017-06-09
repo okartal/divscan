@@ -23,24 +23,24 @@ def shannon_entropy(countmatrix, axis=1, method='plug-in'):
         return ne.evaluate(expression)
 
 
-def js_divergence(indata, weights=None):
+def jsd_is(data, weights=None):
     """
     """
 
     # if imputation:
-    #     impute_value = impute(indata, method='pseudocount')
-    #     indata.fillna(impute_value, inplace=True)
+    #     impute_value = impute(data, method='pseudocount')
+    #     data.fillna(impute_value, inplace=True)
 
-    count_per_unit = indata.sum(axis=1, level='sampling_unit')
+    count_per_unit = data.sum(axis=1, level='sampling_unit')
     samplesize = count_per_unit.notnull().sum(axis=1)
 
     # QC filter
-    min_samplesize = 2
-    min_count = 3
+    min_samplesize = 1
+    min_count = 1
     count_filter = (count_per_unit >= min_count).any(axis=1)
     samplesize_filter = (samplesize >= min_samplesize)
     combined_filter = (count_filter & samplesize_filter)
-    data = indata[combined_filter]
+    data = data[combined_filter]
 
     if data.empty:
         print('...{:>5} % (skipped low-quality region)'.format(progress))

@@ -6,6 +6,9 @@
 
 import os
 
+import numpy as np
+import pandas as pd
+
 import shannonlib.estimators as est
 import shannonlib.gpf_utils as gpf
 
@@ -26,13 +29,18 @@ def divergence(sample, chrom=None, data_columns=None, outfile=None, chunksize=No
             print('...{:>5} % (skipped empty region)'.format(progress))
             continue
 
-        div = est.js_divergence(data) # this is div_it!
-        # div_subgroups = gpf.groupby('stage', metadata=sample, data=data)
-        # div_is = div_subgroups.apply(est.js_divergence) # alternatively map js_divergence to groups using multiprocessing
-        # div_st = div_it - div_is_wavg # use np.average to over subgroups using 'sample size' as weights, see https://stackoverflow.com/a/33054358/2136626
+        div = est.jsd_is(data)
 
         if div.empty:
             continue
+
+        # div_subgroups = gpf.groupby('stage', metadata=sample, data=data)
+        # note: use multiprocessing if you have a list of groupby objects
+        # div_is = div_subgroups.apply(est.jsd_is)
+        # js = div_is.xs('JSD_bit_', level='feature', axis=1)
+        # ss = div_is.xs('sample size', level='feature', axis=1)
+        # avg = np.average(js.values, weights=ss.values, axis=1)
+        # div.insert(1, 'JSD_is', avg)
 
         if not os.path.isfile(outfile):
             header = True
