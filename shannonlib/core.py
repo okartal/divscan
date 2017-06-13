@@ -13,8 +13,9 @@ import shannonlib.estimators as est
 import shannonlib.gpf_utils as gpf
 
 
-def divergence(sample, chrom=None, data_columns=None, outfile=None, chunksize=None):
-    """Computes within-group divergence for population.
+def divergence(sample, chrom=None, data_columns=None, outfile=None,
+               chunksize=None, hierarchy=None):
+    """Compute genome-wide divergence for a population.
     """
 
     regions_pct, regions = gpf.get_regions(
@@ -33,6 +34,8 @@ def divergence(sample, chrom=None, data_columns=None, outfile=None, chunksize=No
 
         if div.empty:
             continue
+        
+        # import pdb; pdb.set_trace()
 
         # div_subgroups = gpf.groupby('stage', metadata=sample, data=data)
         # note: use multiprocessing if you have a list of groupby objects

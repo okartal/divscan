@@ -14,6 +14,8 @@ from shannonlib.core import divergence
 
 
 def run_divergence(args):
+    """Run subcommand for divergence.
+    """
 
     if os.path.isfile(args.output) and not os.stat(args.output).st_size == 0:
         msg = "-- Stopped!\n-- Output file exists and is not empty."
@@ -27,8 +29,8 @@ def run_divergence(args):
         _ = sample['label']
     except KeyError:
         try:
-            sample = pd.read_csv(io.StringIO(
-                meta), comment='#', header=0, sep='\t')
+            sample = pd.read_csv(io.StringIO(meta), comment='#', header=0,
+                                 sep='\t')
             _ = sample['url']
             _ = sample['label']
         except KeyError:
@@ -38,28 +40,28 @@ def run_divergence(args):
                    '-- 2. Ensure that columns "url" and "label" are present')
             sys.exit(msg)
 
-    # GPF data columns
     try:
         assert(len(args.dcols) == len(args.dnames))
+        dtypes = [float if args.prob else int] * len(args.dcols)
+        dcols = [col - 1 for col in args.dcols]
+        gpf_data = [list(zip(dcols, args.dnames, dtypes))]
     except AssertionError:
         msg = ('-- Stopped!\n'
                '-- Length of --dcols and --dnames must match')
         sys.exit(msg)
 
-    dtypes = [float if args.prob else int] * len(args.dcols)
-    dcols = [col - 1 for col in args.dcols]
-    gpf_data = [list(zip(dcols, args.dnames, dtypes))]
+    try:
+        assert set(args.hierarchy) < set(sample.columns)
+    except AssertionError:
+        msg = ('-- Stopped!\n'
+               '-- Sampling hierarchy factors must be present in metadata')
+        sys.exit(msg)
 
-    # if groupby is not None:
-    #     subsample_family = sample.groupby(groupby)
-    #     for key, subsample in subsample_family:
-    #         filename = groupname(by=groupby, name=key, fname=args.output)
-    #         divergence(subsample, chrom=args.sequence, data_columns=gpf_data,
-    #                    outfile=filename, chunksize=args.chunksize)
-    # else:
     print('processing sequence {} ...'.format(args.sequence))
+
     divergence(sample, chrom=args.sequence, data_columns=gpf_data,
-               outfile=args.output, chunksize=args.chunk)
+               outfile=args.output, chunksize=args.chunk,
+               hierarchy=args.hierarchy)
 
     return None
 
@@ -86,6 +88,7 @@ if __name__ == '__main__':
     parser_div.set_defaults(func=run_divergence)
     parser_div.help = 'JS Divergence for genome position files (GPFs).'
     parser_div.description = parser_div.help
+
     parser_div_required = parser_div.add_argument_group('required arguments')
 
     parser_div.add_argument(
@@ -98,9 +101,15 @@ if __name__ == '__main__':
               '- in terms of expected number of genome positions\n'
               '- higher numbers lead to more memory-hungry, faster computations'))
 
+    parser_div.add_argument(
+        '--hierarchy', metavar='FACTOR', nargs='+', type=str, default=[],
+        help=('specify sampling hierarchy (top-down)\n'
+              '- must be a subset of factors in the metadata table')
+    )
+
     parser_div_required.add_argument(
         '-m', '--metadata', metavar='FILE', type=argparse.FileType('r'),
-        required=True, help=('metadata for GPFs\n'
+        required=True, help=('URL for GPF metadata\n'
                              '- comment lines (#) are ignored\n'
                              '- values must be comma- or tab-separated\n'
                              '- first non-comment line must be header\n'
@@ -112,7 +121,7 @@ if __name__ == '__main__':
 
     parser_div_required.add_argument(
         '-s', '--sequence', metavar='ID', required=True, type=str,
-        help='query sequence (chromosome/scaffold) in GPF')
+        help='specify sequence in GPF (chromosome or scaffold)')
 
     parser_div_required.add_argument(
         '-c', '--dcols', metavar='COLN', nargs='+', required=True, type=int,
@@ -121,14 +130,6 @@ if __name__ == '__main__':
     parser_div_required.add_argument(
         '-n', '--dnames', metavar='NAME', nargs='+', required=True, type=str,
         help='names of data columns following the order in --dcols')
-
-    # parser.add_argument('-g', '--groupby', metavar='STR', nargs='+', type=str,
-    #                     help='''
-    #                     The factor according to which the selected set is
-    #                     partitioned; has to match column names in the input
-    #                     metadata. One or more factors can be given, which
-    #                     produces a file for each combination of factors.
-    #                     ''')
 
     args = parser.parse_args()
     args.func(args)
