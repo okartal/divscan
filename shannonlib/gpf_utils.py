@@ -185,11 +185,12 @@ def supremum_position(tabixfiles, chrom):
     return out
 
 
-def groupby(by, metadata=None, data=None):
+def groupby(hier, metadata=None, data=None):
     """Group merged GPF data frame by levels of a factor.
     """
 
-    mapping = metadata.set_index('label')[by].to_dict()
+    mapping = {k: tuple(v) for k, v in zip(metadata.label,
+                                           metadata[hier].values)}
 
     return data.groupby(mapping, axis=1, level=0)
 
