@@ -194,6 +194,8 @@ def groupby(hier, metadata=None, data=None):
 
     return data.groupby(mapping, axis=1, level=0)
 
+def maph(domain, codomain, df=None):
+    return {tuple(k): tuple(v) for k, v in zip(df[domain].values, df[codomain].values)}
 
 # def js_divergence_pool(parameter_list):
 #     """
