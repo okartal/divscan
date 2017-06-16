@@ -63,7 +63,7 @@ def jsd_is(data, weights=None):
         div.insert(0, 'JSD_bit_', constant.LOG2E *
                    (mix_entropy - avg_entropy))
         div.insert(1, 'sample size', samplesize[combined_filter])
-        div.insert(2, 'HMIX_bit_', constant.LOG2E * mix_entropy)
+        # div.insert(2, 'HMIX_bit_', constant.LOG2E * mix_entropy)
         # div['members'] = (data_unit.apply(lambda x: ','.join(x.dropna().index), axis=1))
 
         return div
