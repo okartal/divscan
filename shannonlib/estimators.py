@@ -4,11 +4,15 @@
 """Estimators of information-theoretic quantities.
 """
 
+from functools import partial
+from multiprocessing import Pool, cpu_count
+
 import numexpr as ne
 import numpy as np
 import pandas as pd
 
 import shannonlib.constants as constant
+from shannonlib.preprocessing import partition
 
 
 def shannon_entropy(countmatrix, axis=1, method='plug-in'):
@@ -23,13 +27,16 @@ def shannon_entropy(countmatrix, axis=1, method='plug-in'):
         return ne.evaluate(expression)
 
 
-def jsd_is(data, weights=None):
+def jsd_is(data, grouped=False):
     """
     """
 
     # if imputation:
     #     impute_value = impute(data, method='pseudocount')
     #     data.fillna(impute_value, inplace=True)
+
+    if grouped:
+        return data.apply(jsd_is)
 
     count_per_unit = data.sum(axis=1, level='sampling_unit')
     samplesize = count_per_unit.notnull().sum(axis=1)
@@ -67,3 +74,34 @@ def jsd_is(data, weights=None):
         # div['members'] = (data_unit.apply(lambda x: ','.join(x.dropna().index), axis=1))
 
         return div
+
+
+def js_divergence(data, metadata, hierarchy=None):
+    """
+    """
+
+    divIT = jsd_is(data)
+
+    if hierarchy:
+        metadata = metadata.set_index('label')
+        maps = partition(metadata, levels=hierarchy)
+        groups = [data.groupby(lev, axis=1, level=0) for lev in maps]
+        processes = min(len(hierarchy), cpu_count())
+        with Pool(processes) as pool:
+            divIS = pool.map(partial(jsd_is, grouped=True), groups)
+
+        # js = div_is.xs('JSD_bit_', level='feature', axis=1)
+        # ss = div_is.xs('sample size', level='feature', axis=1)
+        # avg = np.average(js.values, weights=ss.values, axis=1)
+
+        return [divIT] + divIS
+    else:
+        return [divIT]
+
+
+# def js_divergence_pool(parameter_list):
+#     """
+#     """
+#     #TODO add ungrouped df to list for getting J_IT
+#     with Pool(cpu_count()) as pool:
+#         return pool.map(js_divergence, [group for key, group in groups])
