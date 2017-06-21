@@ -5,6 +5,20 @@
 """
 
 
+def partition(dframe, levels=None):
+    """Map IDs to subsets at each consecutive level of hierarchy.
+    """
+
+    maps = []
+
+    for i, k in enumerate(levels):
+        maps.append(dframe[levels[:i + 1]]
+                    .apply(lambda x: ' > '.join(x.astype(str)), axis=1)
+                    .to_dict())
+
+    return maps
+
+    
 def impute(data, method='pseudocount'):
     """Imputes missing values of a data frame.
     """
