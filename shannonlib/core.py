@@ -21,18 +21,17 @@ def divergence(sample, chrom=None, data_columns=None, outfile=None,
     regions_pct, regions = gpf.get_regions(
         sample['url'], chrom=chrom, exp_numsites=chunksize)
 
-    regions_data = gpf.get_data(sample['url'], labels=sample['label'],
-                                data_columns=data_columns, regions=regions)
+    regions_data = gpf.get_data(sample, hierarchy, data_columns, regions)
 
     for progress, data in zip(regions_pct, regions_data):
 
         if data.empty:
             print('...{:>5} % (skipped empty region)'.format(progress))
             continue
+        
+        div = est.js_divergence(data)
 
-        div = est.js_divergence(data, sample, hierarchy)
-
-        if div.empty:
+        if not div:
             continue
         
         if not os.path.isfile(outfile):

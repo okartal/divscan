@@ -59,19 +59,12 @@ def get_regions(tabixfiles, chrom=None, exp_numsites=1e3):
     return progress, regions
 
 
-def get_data(files, labels=None, data_columns=None, regions=None, join='outer',
-             preset='bed'):
+def get_data(metadata, hierarchy=[], data_columns=None,
+             regions=None, join='outer', preset='bed'):
     """Combines tabix-indexed genome position files.
     """
 
-    # check input arguments
-
-    if labels is None:
-        keys = ['unit_{}'.format(pos + 1) for pos, _ in enumerate(files)]
-    elif len(labels) == len(files):
-        keys = labels
-    else:
-        raise InputMismatchError('Number of files and labels must match!')
+    files = metadata['url']
 
     if data_columns is None:
         raise MissingInputError(
@@ -86,10 +79,9 @@ def get_data(files, labels=None, data_columns=None, regions=None, join='outer',
             'the number of entries must match the number of files!')
 
     if preset == 'bed':
-        index = [
-            (0, '#chrom', str),
-            (1, 'start', np.int64),
-            (2, 'end', np.int64)]
+        index = [(0, '#chrom', str),
+                 (1, 'start', np.int64),
+                 (2, 'end', np.int64)]
         index_col = [i[0] for i in index]
     if preset == 'gff':
         # TODO
@@ -102,7 +94,13 @@ def get_data(files, labels=None, data_columns=None, regions=None, join='outer',
         pass
 
     # output columns
-    names = ['sampling_unit', 'feature']
+    if not hierarchy:
+        keys = metadata['label']
+    else:
+        keys = [tuple(r) for r in metadata[hierarchy + ['label']].values]
+
+    names = hierarchy + ['sampling_unit', 'feature']
+
     columns = [index + cols for cols in data_columns]
 
     for region in regions:

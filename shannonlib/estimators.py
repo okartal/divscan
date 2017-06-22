@@ -76,32 +76,29 @@ def jsd_is(data, grouped=False):
         return div
 
 
-def js_divergence(data, metadata, hierarchy=None):
+def js_divergence(data):
     """
     """
 
     divIT = jsd_is(data)
 
-    if hierarchy:
-        metadata = metadata.set_index('label')
-        maps = partition(metadata, levels=hierarchy)
-        groups = [data.groupby(lev, axis=1, level=0) for lev in maps]
+    if divIT.empty:
+        return False
+    elif data.columns.nlevels > 2:
+        hierarchy = data.columns.names[:-2]
+        groups = [data.groupby(axis=1, level=hierarchy[:1 + i])
+                  for i, _ in enumerate(hierarchy)]
         processes = min(len(hierarchy), cpu_count())
         with Pool(processes) as pool:
             divIS = pool.map(partial(jsd_is, grouped=True), groups)
-
-        # js = div_is.xs('JSD_bit_', level='feature', axis=1)
-        # ss = div_is.xs('sample size', level='feature', axis=1)
-        # avg = np.average(js.values, weights=ss.values, axis=1)
+        
+        # for each level but start with clever choice in loop to use weights of
+        # higher levels for lower ones
+        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        # js = div_is.xs('JSD_bit_', level='feature', axis=1) ss =
+        # div_is.xs('sample size', level='feature', axis=1) avg =
+        # np.average(js.values, weights=ss.values.fillna(0), axis=1)
 
         return [divIT] + divIS
     else:
         return [divIT]
-
-
-# def js_divergence_pool(parameter_list):
-#     """
-#     """
-#     #TODO add ungrouped df to list for getting J_IT
-#     with Pool(cpu_count()) as pool:
-#         return pool.map(js_divergence, [group for key, group in groups])
