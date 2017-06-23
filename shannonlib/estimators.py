@@ -77,7 +77,7 @@ def jsd_is(data, grouped=False):
 
 
 def js_divergence(data):
-    """
+    """Hierarchical JS divergence.
     """
 
     divIT = jsd_is(data)
@@ -91,14 +91,23 @@ def js_divergence(data):
         processes = min(len(hierarchy), cpu_count())
         with Pool(processes) as pool:
             divIS = pool.map(partial(jsd_is, grouped=True), groups)
+            divIS_avg = pool.map(partial(div_avg, value='JSD_bit_', weight='sample size',
+                                         level='feature'), divIS)
         
-        # for each level but start with clever choice in loop to use weights of
-        # higher levels for lower ones
-        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        # js = div_is.xs('JSD_bit_', level='feature', axis=1) ss =
-        # div_is.xs('sample size', level='feature', axis=1) avg =
-        # np.average(js.values, weights=ss.values.fillna(0), axis=1)
+        # divST = pd.concat(divIS_avg, keys=hierarchy, axis=1)
 
-        return [divIT] + divIS
+        # for each level but start with clever choice in loop to use weights of
+        # higher levels for lower ones NOTE: you have to do it recursively sa the above function is 
+        # not enough
+        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+        return divIS
     else:
-        return [divIT]
+        return divIT
+
+
+def div_avg(div, value=None, weight=None, level=None):
+    v = div.xs(value, level=level, axis=1).values
+    w = div.xs(weight, level=level, axis=1).fillna(0).values
+    avg = np.average(v, weights=w, axis=1)
+    return avg

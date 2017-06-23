@@ -30,7 +30,7 @@ def divergence(sample, chrom=None, data_columns=None, outfile=None,
             continue
         
         div = est.js_divergence(data)
-
+        import pdb; pdb.set_trace()
         if not div:
             continue
         
