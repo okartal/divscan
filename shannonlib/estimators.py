@@ -61,16 +61,17 @@ def jsd_is(data, grouped=False):
             data_feature.shape[1])
 
         mix_entropy = shannon_entropy(data_feature.values)
-        avg_entropy = np.average(
-            shannon_entropy(counts, axis=2),
-            weights=data_unit.fillna(0),
-            axis=1)
+        avg_entropy = np.average(shannon_entropy(counts, axis=2),
+                                 weights=data_unit.fillna(0),
+                                 axis=1)
+
+        jsd = np.where(np.isclose(mix_entropy, avg_entropy, atol=1.e-2),
+                       .0, mix_entropy - avg_entropy)
 
         div = data_feature
-        div.insert(0, 'JSD_bit_', constant.LOG2E *
-                   (mix_entropy - avg_entropy))
-        div.insert(1, 'sample size', samplesize[combined_filter])
-        # div.insert(2, 'HMIX_bit_', constant.LOG2E * mix_entropy)
+        div['JSD (bit)'] = constant.LOG2E * jsd
+        div['sample size'] = samplesize[combined_filter]
+        # div.insert(2, 'HMIX (bit)', constant.LOG2E * mix_entropy)
         # div['members'] = (data_unit.apply(lambda x: ','.join(x.dropna().index), axis=1))
 
         return div
@@ -91,13 +92,13 @@ def js_divergence(data):
         processes = min(len(hierarchy), cpu_count())
         with Pool(processes) as pool:
             divIS = pool.map(partial(jsd_is, grouped=True), groups)
-            divIS_avg = pool.map(partial(div_avg, value='JSD_bit_', weight='sample size',
+            divIS_avg = pool.map(partial(div_avg, value='JSD (bit)', weight='sample size',
                                          level='feature'), divIS)
-        
+
         # divST = pd.concat(divIS_avg, keys=hierarchy, axis=1)
 
         # for each level but start with clever choice in loop to use weights of
-        # higher levels for lower ones NOTE: you have to do it recursively sa the above function is 
+        # higher levels for lower ones NOTE: you have to do it recursively sa the above function is
         # not enough
         # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

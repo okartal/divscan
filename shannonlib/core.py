@@ -42,7 +42,7 @@ def divergence(sample, chrom=None, data_columns=None, outfile=None,
             header = False
 
         (div
-         .round({'JSD_bit_': 3, 'HMIX_bit_': 3})
+         .round({'JSD (bit)': 3, 'HMIX (bit)': 3})
          .to_csv(outfile, header=header, sep='\t', index=True, mode='a'))
 
         print('...{:>5} %'.format(progress))
