@@ -80,7 +80,7 @@ def jsd_is(data, grouped=False):
         return div
 
 
-def js_divergence(data):
+def jsd_st(data):
     """Hierarchical JS divergence.
     """
 
@@ -88,40 +88,18 @@ def js_divergence(data):
 
     if divIT.empty:
         return False
-    elif data.columns.nlevels > 2:  # gpf.get_data alwayl loads at least two levels, 'feature' and 'sampling_unit'
+    elif data.columns.nlevels > 2:
         hierarchy = data.columns.names[:-2]
         data_groups = [data.groupby(axis=1, level=hierarchy[:1 + i])
                        for i, _ in enumerate(hierarchy)]
         processes = min(len(hierarchy), cpu_count())
         with Pool(processes) as pool:
             divIS = pool.map(partial(jsd_is, grouped=True), data_groups)
-            # divIS_avg = pool.map(partial(div_avg, value='JSD (bit)', weight='sample size',
-            #                              level='feature'), divIS)
-        import pdb; pdb.set_trace()
-        # divST = pd.concat(divIS_avg, keys=hierarchy, axis=1)
-
-        # for each level but start with clever choice in loop to use weights of
-        # higher levels for lower ones NOTE: you have to do it recursively sa the above function is
-        # not enough
-        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
         return divIS
     else:
         return divIT
 
 
-def avg(dframe, value=None, weight=None, level=None, axis=1):
-    """Weighted average.
-    """
-
-    v = dframe.xs(value, level=level, axis=axis, drop_level=False)
-    w = dframe.xs(weight, level=level, axis=axis, drop_level=False)
-
-    d = {value: np.average(v.values, weights=w.values, axis=axis),
-         weight: w.sum(axis=1).values}
-
-    df = pd.DataFrame(d).reset_index()
-    # FIXME: problems with duplicate index!!
-    # we have to do some rename_axis etc. which is not nice
-
-    return df
+def jsd_st_bottomup(parameter_list):
+    pass

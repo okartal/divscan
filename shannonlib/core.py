@@ -29,8 +29,8 @@ def divergence(sample, chrom=None, data_columns=None, outfile=None,
             print('...{:>5} % (skipped empty region)'.format(progress))
             continue
         
-        div = est.js_divergence(data)
-        import pdb; pdb.set_trace()
+        div = est.jsd_is(data)
+
         if not div:
             continue
         
