@@ -59,12 +59,12 @@ def get_regions(tabixfiles, chrom=None, exp_numsites=1e3):
     return progress, regions
 
 
-def get_data(metadata, hierarchy=[], data_columns=None,
+def get_data(files, keys=None, data_columns=None,
              regions=None, join='outer', preset='bed'):
     """Combines tabix-indexed genome position files.
-    """
 
-    files = metadata['url']
+    data_columns : list of tuple list
+    """
 
     if data_columns is None:
         raise MissingInputError(
@@ -93,13 +93,7 @@ def get_data(metadata, hierarchy=[], data_columns=None,
         # TODO
         pass
 
-    # output columns
-    if not hierarchy:
-        keys = metadata['label']
-    else:
-        keys = [tuple(r) for r in metadata[hierarchy + ['label']].values]
-
-    names = hierarchy + ['sampling_unit', 'feature']
+    levels = ['sampling_unit', 'feature']
 
     columns = [index + cols for cols in data_columns]
 
@@ -125,7 +119,7 @@ def get_data(metadata, hierarchy=[], data_columns=None,
             for i, tbx in tabix)
 
         merged_dframe = pd.concat(
-            dframes, axis=1, keys=keys, names=names, join=join)
+            dframes, axis=1, keys=keys, names=levels, join=join)
 
         yield merged_dframe
 

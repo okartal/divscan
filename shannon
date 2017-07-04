@@ -21,18 +21,17 @@ def run_divergence(args):
         msg = "-- Stopped!\n-- Output file exists and is not empty."
         sys.exit(msg)
 
-    meta = args.metadata.read()
+    metadata = args.metadata.read()
 
     try:
-        sample = pd.read_csv(io.StringIO(meta), comment='#', header=0)
-        _ = sample['url']
-        _ = sample['label']
+        meta = pd.read_csv(io.StringIO(metadata), comment='#',
+                             header=0, index_col=args.index)
+        _ = meta[args.files]
     except KeyError:
         try:
-            sample = pd.read_csv(io.StringIO(meta), comment='#', header=0,
-                                 sep='\t')
-            _ = sample['url']
-            _ = sample['label']
+            meta = pd.read_csv(io.StringIO(metadata), comment='#', header=0,
+                                 sep='\t', index_col=args.index)
+            _ = meta[args.files]
         except KeyError:
             msg = ('-- Stopped!\n'
                    '-- Could not parse metadata.\n'
@@ -51,7 +50,7 @@ def run_divergence(args):
         sys.exit(msg)
 
     try:
-        assert set(args.hierarchy) < set(sample.columns)
+        assert set(args.hierarchy) < set(meta.columns)
     except AssertionError:
         msg = ('-- Stopped!\n'
                '-- Sampling hierarchy factors must be present in metadata')
@@ -59,7 +58,7 @@ def run_divergence(args):
 
     print('processing sequence {} ...'.format(args.sequence))
 
-    divergence(sample, chrom=args.sequence, data_columns=gpf_data,
+    divergence(meta, chrom=args.sequence, data_columns=gpf_data,
                outfile=args.output, chunksize=args.chunk,
                hierarchy=args.hierarchy)
 
@@ -115,6 +114,16 @@ if __name__ == '__main__':
                              '- first non-comment line must be header\n'
                              '- "url" and "label" columns are required\n'
                              '- if stdin is metadata use "--metadata -"'))
+
+    parser_div_required.add_argument(
+        '-i', '--index', metavar='COLUMN NAME',
+        type=str, default='label',
+        help='name of index column in metadata (default: %(default)d)')
+
+    parser_div_required.add_argument(
+        '-f', '--files', metavar='COLUMN NAME',
+        type=str, default='url',
+        help='name of filepath column in metadata (default: %(default)d)')
 
     parser_div_required.add_argument(
         '-o', '--output', metavar='FILE', required=True, help='output filepath')

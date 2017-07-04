@@ -31,6 +31,7 @@ def shannon_entropy(countmatrix, axis=1, method='plug-in'):
 def jsd_is(data, grouped=False):
     """
     """
+    # BUG in JSD calculation!!!
 
     # if imputation:
     #     impute_value = impute(data, method='pseudocount')
@@ -87,6 +88,23 @@ def jsd_is(data, grouped=False):
         return div
 
 
+def jsd_average(mask, divset=None):
+    """Returns average JS divergence over a subset of superset.
+    """
+
+    subset = list(compress(divset, mask))
+
+    if len(subset) == 1:
+        return subset[0]['JSD (bit)']
+    elif len(subset) > 1:
+        div = pd.concat(subset, keys=None, axis=1)
+        jsdiv = div.xs('JSD (bit)', level='feature', axis=1)
+        ssize = div.xs('sample size', level='feature', axis=1).fillna(0)
+        avg = np.average(jsdiv.values, weights=ssize.values, axis=1)
+        return pd.DataFrame(avg, index=div.index)
+    # else return an exception for empty subset and let caller handle it
+
+
 def js_divergence(data, meta, hierarchy=None):
     """Returns within-group divergences along the specified sampling hierarchy.
 
@@ -115,14 +133,14 @@ def js_divergence(data, meta, hierarchy=None):
     if not hierarchy or div.empty:
         return div
 
-    title = dict()
+    title = ['JSD (bit)']
     quset = dict()
 
     for i, level in enumerate(hierarchy):
         depth = i + 1
         eqrel = hierarchy[:depth]
         groups = meta.groupby(eqrel).groups.values()
-        title[level] = 'JSD[{d}~{l}] (bit)'.format(d=depth, l=level)
+        title.append('JSD[{d}~{l}] (bit)'.format(d=depth, l=level))
         quset[level] = set(tuple(sorted(s)) for s in groups if len(s) > 1)
 
     qusetunion = list(set.union(*quset.values()))
@@ -130,27 +148,19 @@ def js_divergence(data, meta, hierarchy=None):
     if not qusetunion:
         return div
     else:
-        quset_data = [data[list(col)] for col in qusetunion]
+        quset_data = [data[list(s)] for s in qusetunion]
+
+        mask = [[1 if s in quset[level] else 0 for s in qusetunion]
+                for level in hierarchy]
+        
         nproc = min(len(qusetunion), cpu_count())
 
         with Pool(processes=nproc) as pool:
             div_qusetunion = pool.map(jsd_is, quset_data)
+            # div_level = pool.map(partial(jsd_average, divset=div_qusetunion), mask)
 
-        for level in hierarchy:
-            # maybe precompute the mask and write a function that produces
-            # a list of the final div[i] to concatenate them with div[0]
-            mask = [1 if s in quset[level] else 0 for s in qusetunion]
-            div_quset = compress(div_qusetunion, mask)
-            if len(div_quset) == 1:
-                div[title[level]] = div_quset[0]['JSD (bit)'].values
-            else:
-                div_quset = pd.concat(div_quset, keys=None, axis=1)
-                sample_size = div_quset.xs(...).values
-                jsd = div_quset.xs(...).values
-                div[title[level]] = np.average(
-                    jsd, weights=sample_size, axis=1)
-
-    return div
+        import pdb; pdb.set_trace()
+        return pd.concat([div] + div_level, keys=title, axis=1)
 
     #         elif depth == 1:
     #             div_average(div_quset)
