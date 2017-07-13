@@ -88,8 +88,8 @@ def jsd_is(data, grouped=False):
         return div
 
 
-def jsd_average(mask, divset=None):
-    """Returns average JS divergence over a subset of superset.
+def jsd_average(divset, mask):
+    """Returns average JS divergence over a subset given by mask.
     """
 
     subset = list(compress(divset, mask))
@@ -98,69 +98,106 @@ def jsd_average(mask, divset=None):
         return subset[0]['JSD (bit)']
     elif len(subset) > 1:
         div = pd.concat(subset, keys=None, axis=1)
-        jsdiv = div.xs('JSD (bit)', level='feature', axis=1)
-        ssize = div.xs('sample size', level='feature', axis=1).fillna(0)
+        jsdiv = div.xs('JSD (bit)', axis=1)
+        ssize = div.xs('sample size', axis=1).fillna(0)
         avg = np.average(jsdiv.values, weights=ssize.values, axis=1)
-        return pd.DataFrame(avg, index=div.index)
+        return pd.Series(avg, index=div.index)
     # else return an exception for empty subset and let caller handle it
 
 
-def js_divergence(data, meta, hierarchy=None):
-    """Returns within-group divergences along the specified sampling hierarchy.
+def js_divergence(data, meta, subdivision=None):
+    """Jensen-Shannon Divergence along population subdivision.
 
-    compute the quset at each level; note that the same set can be present
-    at different levels, so do not compute div_is more than once. that
-    means, if we use a pool of workers to apply jsd_is to the *union* of
-    qusets, we need to keep track of where each set belongs to, in order
-    to make the right averaging;
-    1. make qusets (q_level1, q_level2, etc.)
-    2. make list of union of qusets (q)
-    3. make lookup table for q (essentially given by qusets)
-    columns: index(int), level1(bool), level2(bool), etc
-    if q[i] in q_level1 set level1==True, etc.
-    4. compute divIS list by applying div_is to q
-    5. compress/mask the divIS result list with the level column and average the set
+    Computes hierarchical Jensen-Shannon Divergence (hJSD) over a statistical
+    ensemble at each index.
 
-    FIXME: index_col must be given for meta, add index_col parameter in CLI
-    TODO: only keep loci with divergence and sample size > 1 for downstream nodes
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Data values for population sample. The DataFrame is assumed to have a
+        2-level index along axis 1. The first level indexes the population
+        sample, the second level indexes the sample space. The values are counts
+        or probabilities for each event.
+    meta : pandas.DataFrame
+        Metadata for the population sample. The index (along axis 0) must
+        correspond with the population sample index in the data.
+    subdivision : list of string objects
+        Names of factors along which the population is subdivided. The order of
+        factors matters as it defines the sampling hierarchy. The names must
+        appear as columns in the metadata.
+
+    Returns
+    -------
+    divergence : pandas.DataFrame
+        Without subdivision, the function returns a single value (the classical
+        JSD) for each index (axis 0). For n subdivisions, the function returns
+        n+1 values for each index: the n between-group divergences at each level
+        of subdivision plus the averaged within-group divergence for the
+        terminal (i.e. non-subdivided) groups in the hierarchy.
+
+    Notes
+    -----
+    The Jensen-Shannon Divergence (JSD) is a measure of heterogeneity for a set
+    of probability distributions. This function implements a measure that
+    generalizes JSD to the case of a hierarchically subdivided population
+    (hJSD); JSD is the special case of hJSD without subdivision.
+
+    TODO
+    ----
+    - remove loci without divergence for downstream nodes
+    - diff = lambda x: [x[i] - x[i+1] for i,n in enumerate(x) if i < len(x)-1]
     """
 
-    div = jsd_is(data)
+    entropy = []
 
-    if hierarchy is None:
-        hierarchy = []
+    # process
+    
+    divergence = pairwise_diff(entropy)
 
-    if not hierarchy or div.empty:
-        return div
+    # output
+    return pd.concat(divergence, keys=None, axis=1)
+    ########
 
-    title = ['JSD (bit)']
+
+    if subdivision is None:
+        subdivision = []
+
+    if not subdivision:
+        return jsd_is(data)
+
+    title = []
     quset = dict()
 
-    for i, level in enumerate(hierarchy):
+    for i, level in enumerate(subdivision):
         depth = i + 1
-        eqrel = hierarchy[:depth]
-        groups = meta.groupby(eqrel).groups.values()
-        title.append('JSD[{d}~{l}] (bit)'.format(d=depth, l=level))
-        quset[level] = set(tuple(sorted(s)) for s in groups if len(s) > 1)
+        title.append('d[{d}@{l}] (bit)'.format(d=depth, l=level))
+        eqrel = subdivision[:depth]
+        quotient_set = meta.groupby(eqrel).groups.values()
+        quset[level] = set(tuple(sorted(s)) for s in quotient_set if len(s) > 1)
 
     qusetunion = list(set.union(*quset.values()))
 
     if not qusetunion:
-        return div
+        return jsd_is(data)
     else:
-        quset_data = [data[list(s)] for s in qusetunion]
+        dataset = [data[list(s)] for s in qusetunion]
 
         mask = [[1 if s in quset[level] else 0 for s in qusetunion]
-                for level in hierarchy]
+                for level in subdivision]
         
         nproc = min(len(qusetunion), cpu_count())
-
         with Pool(processes=nproc) as pool:
-            div_qusetunion = pool.map(jsd_is, quset_data)
-            # div_level = pool.map(partial(jsd_average, divset=div_qusetunion), mask)
+            jsd_dataset = pool.map(jsd_is, dataset)
+
+        nproc = min(len(mask), cpu_count())
+        with Pool(processes=nproc) as pool:
+            args = ((jsd_dataset, m) for m in mask)
+            div = pool.starmap(jsd_average, args)
 
         import pdb; pdb.set_trace()
-        return pd.concat([div] + div_level, keys=title, axis=1)
+        df = pd.concat(div, keys=title, axis=1)
+        
+        return df
 
     #         elif depth == 1:
     #             div_average(div_quset)
