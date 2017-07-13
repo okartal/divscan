@@ -148,14 +148,33 @@ def js_divergence(data, meta, subdivision=None):
     - diff = lambda x: [x[i] - x[i+1] for i,n in enumerate(x) if i < len(x)-1]
     """
 
+    # compute entropy components
+
     entropy = []
 
-    # process
+    # process entropy components
     
-    divergence = pairwise_diff(entropy)
+    with Pool(processes=None) as pool:
+        jsd_components = pool.map(pairwise_diff, entropy)
 
-    # output
-    return pd.concat(divergence, keys=None, axis=1)
+    # generate output
+
+    if not subdivision:
+        key = ['J[0:i] (bit)']
+    else:
+        key = []
+        for i, _ in enumerate(subdivision):
+            ref = str(i)
+            div = str(i + 1) if (i + 1) < len(subdivision) else 'i'
+            key.append('J[{}:{}] (bit)'.format(ref, div))
+
+    divergence = pd.concat(jsd_components, keys=key, axis=1)
+    
+    if subdivision:
+        return divergence.insert(0, 'J[0:i] (bit)', div.sum(axis=1))
+    else:
+        return divergence
+
     ########
 
 
