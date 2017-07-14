@@ -156,7 +156,7 @@ def js_divergence(data, meta, subdivision=None):
         key = ['J[0:i] (bit)']
     else:
         key = []
-        quset = dict()
+        quset = range(len(subdivision))
         for n, level in enumerate(subdivision):
             depth = n + 1
             # generate key
@@ -167,7 +167,7 @@ def js_divergence(data, meta, subdivision=None):
             # generate quotient sets
             eqrel = subdivision[:depth]
             group = meta.groupby(eqrel).groups.values()
-            quset[level] = set(tuple(sorted(s)) for s in group) # if len(s) > 1 ?
+            quset[n] = set(tuple(sorted(s)) for s in group) # if len(s) > 1 ?
         
         # Eliminate duplicate equivalence classes over all levels and keep track
         # at which level each unique class appears by using a boolean mask. This
@@ -175,12 +175,17 @@ def js_divergence(data, meta, subdivision=None):
 
         uniq_classes = list(set.union(*quset.values()))
 
-        mask = [[1 if eclass in quset[level] else 0 for eclass in uniq_classes]
-                for level in subdivision]
+        mask = [[1 if eclass in quset[n] else 0 for eclass in uniq_classes]
+                for n, _ in enumerate(subdivision)]
 
 
     # compute entropy vector
     entropy = []
+
+    # for all sets in the terminal quset (leaves) do
+    mixture = data.sum(axis=1, level='event')
+    mixture_distribution
+    mixture_entropy
 
     # process entropy vector
     # NOTE: may benefit from parallelizing if hierarchy is deep and memory permits
@@ -196,11 +201,7 @@ def js_divergence(data, meta, subdivision=None):
     else:
         return divergence
 
-    ########
-
-    if not subdivision:
-        return jsd_is(data)
-
+    ######################
 
 
     if not qusetunion:
