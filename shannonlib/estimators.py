@@ -148,53 +148,60 @@ def js_divergence(data, meta, subdivision=None):
     - diff = lambda x: [x[i] - x[i+1] for i,n in enumerate(x) if i < len(x)-1]
     """
 
-    # compute entropy components
-
-    entropy = []
-
-    # process entropy components
-    
-    with Pool(processes=None) as pool:
-        jsd_components = pool.map(pairwise_diff, entropy)
-
-    # generate output
+    # preprocess
+    if subdivision is None:
+        subdivision = []
 
     if not subdivision:
         key = ['J[0:i] (bit)']
     else:
         key = []
-        for i, _ in enumerate(subdivision):
-            ref = str(i)
-            div = str(i + 1) if (i + 1) < len(subdivision) else 'i'
-            key.append('J[{}:{}] (bit)'.format(ref, div))
+        quset = dict()
+        for n, level in enumerate(subdivision):
+            depth = n + 1
+            # generate key
+            ref = str(n)
+            div = str(depth) if depth < len(subdivision) else 'i'
+            lev = '({})'.format(level) if depth < len(subdivision) else ''
+            key.append('J[{}:{}{}] (bit)'.format(ref, div, lev))
+            # generate quotient sets
+            eqrel = subdivision[:depth]
+            group = meta.groupby(eqrel).groups.values()
+            quset[level] = set(tuple(sorted(s)) for s in group) # if len(s) > 1 ?
+        
+        # Eliminate duplicate equivalence classes over all levels and keep track
+        # at which level each unique class appears by using a boolean mask. This
+        # way qusets can be recovered.
 
+        uniq_classes = list(set.union(*quset.values()))
+
+        mask = [[1 if eclass in quset[level] else 0 for eclass in uniq_classes]
+                for level in subdivision]
+
+
+    # compute entropy vector
+    entropy = []
+
+    # process entropy vector
+    # NOTE: may benefit from parallelizing if hierarchy is deep and memory permits
+    # NOTE: if ha and hb are close or if ha is close to zero can lead to numerical artifacts
+    
+    jsd_components = (ha - hb for ha, hb in zip(entropy, entropy[1:]))
+
+    # output
     divergence = pd.concat(jsd_components, keys=key, axis=1)
     
     if subdivision:
-        return divergence.insert(0, 'J[0:i] (bit)', div.sum(axis=1))
+        return divergence.insert(0, 'J[0:i] (bit)', divergence.sum(axis=1))
     else:
         return divergence
 
     ########
 
-
-    if subdivision is None:
-        subdivision = []
-
     if not subdivision:
         return jsd_is(data)
 
-    title = []
-    quset = dict()
 
-    for i, level in enumerate(subdivision):
-        depth = i + 1
-        title.append('d[{d}@{l}] (bit)'.format(d=depth, l=level))
-        eqrel = subdivision[:depth]
-        quotient_set = meta.groupby(eqrel).groups.values()
-        quset[level] = set(tuple(sorted(s)) for s in quotient_set if len(s) > 1)
-
-    qusetunion = list(set.union(*quset.values()))
 
     if not qusetunion:
         return jsd_is(data)
