@@ -1,5 +1,5 @@
 # -*- coding:utf-8 -*-
-# # estimators.py
+# estimators.py
 
 """Estimators of information-theoretic quantities.
 """
@@ -105,8 +105,8 @@ def jsd_average(divset, mask):
     # else return an exception for empty subset and let caller handle it
 
 
-def js_divergence(data, meta, subdivision=None):
-    """Jensen-Shannon Divergence along population subdivision.
+def js_divergence(data, meta, subdivision=None, weight=None):
+    """Hierarchical Jensen-Shannon Divergence.
 
     Computes hierarchical Jensen-Shannon Divergence (hJSD) over a statistical
     ensemble at each index.
@@ -125,6 +125,12 @@ def js_divergence(data, meta, subdivision=None):
         Names of factors along which the population is subdivided. The order of
         factors matters as it defines the sampling hierarchy. The names must
         appear as columns in the metadata.
+    weight : array-like
+        Weights for the individual samples. If None (default), input is assumed
+        to be count data. A value implies that input data is given in the form
+        of probabilities (i.e. a probability distribution for each sample). The
+        weight matrix must be of the same shape as data along axis 0 and axis 1,
+        level 0 (sample). 
 
     Returns
     -------
@@ -152,57 +158,91 @@ def js_divergence(data, meta, subdivision=None):
     if subdivision is None:
         subdivision = []
 
-    if not subdivision:
-        key = ['J[0:i] (bit)']
-    else:
-        key = []
+    # initialize key list
+    template = 'J[{reference_id}:{divisor_id}{divisor_name}] (bit)'
+    keys = [template.format(reference_id='0', divisor_id='i', divisor_name='')]
+
+    if subdivision:
         quset = range(len(subdivision))
         for n, level in enumerate(subdivision):
             depth = n + 1
-            # generate key
-            ref = str(n)
-            div = str(depth) if depth < len(subdivision) else 'i'
-            lev = '({})'.format(level) if depth < len(subdivision) else ''
-            key.append('J[{}:{}{}] (bit)'.format(ref, div, lev))
-            # generate quotient sets
+            subdivided = depth < len(subdivision)
+            # add key
+            key = template.format(
+                reference_id=str(n),
+                divisor_id=str(depth) if subdivided else 'i',
+                divisor_name='({})'.format(level) if subdivided else '')
+            keys.append(key)
+            # add quotient set
             eqrel = subdivision[:depth]
-            group = meta.groupby(eqrel).groups.values()
-            quset[n] = set(tuple(sorted(s)) for s in group) # if len(s) > 1 ?
-        
+            groups = meta.groupby(eqrel).groups.values()
+            quset[n] = set(tuple(sorted(g)) for g in groups)  # if len(s) > 1 ?
+
         # Eliminate duplicate equivalence classes over all levels and keep track
         # at which level each unique class appears by using a boolean mask. This
         # way qusets can be recovered.
-
-        uniq_classes = list(set.union(*quset.values()))
-
+        uniq_classes = list(set.union(*quset))
         mask = [[1 if eclass in quset[n] else 0 for eclass in uniq_classes]
                 for n, _ in enumerate(subdivision)]
 
+        entropy = range(len(subdivision) + 2)
 
-    # compute entropy vector
-    entropy = []
+    # TODO for all sets in the terminal quset (leaves) do
+    # ensuring proper merge (concat) along axis 0 at construction of the entropy data frame
 
-    # for all sets in the terminal quset (leaves) do
-    mixture = data.sum(axis=1, level='event')
-    mixture_distribution
-    mixture_entropy
-
-    # process entropy vector
-    # NOTE: may benefit from parallelizing if hierarchy is deep and memory permits
-    # NOTE: if ha and hb are close or if ha is close to zero can lead to numerical artifacts
+    i_mixture = data.sum(axis=1, level='event')
+    i_weights = data.sum(axis=1, level='sample')
+    i_samples = i_weights.notnull().sum(axis=1)
+    i_entropy = shannon_entropy(data.values.reshape(None), axis=None)
     
-    jsd_components = (ha - hb for ha, hb in zip(entropy, entropy[1:]))
+    g_mixture = np.average() # over all i!
 
-    # output
-    divergence = pd.concat(jsd_components, keys=key, axis=1)
+    entropy[first] = shannon_entropy(g_mixture)
+    entropy[last] = entropy[first] if entropy[first] close to 0 else np.average(i_entropy)
+
+    entropy_actual = np.where(np.isclose(entropy[-2], 0.0), entropy[-2], VALUE)
+    entropy.insert(-1, )
+
+    # process entropy data
     
+    jsd = jsd_shannon(entropy.iloc[:, :n].values, entropy.iloc[:, 1:].values)
+
     if subdivision:
-        return divergence.insert(0, 'J[0:i] (bit)', divergence.sum(axis=1))
-    else:
-        return divergence
+        jsd_total = jsd_shannon(entropy.iloc[:, 0].values, entropy.iloc[:, -1].values)
+        jsd = np.hstack([jsd_total, jsd])
 
-    ######################
+    return pd.DataFrame(jsd, index=data.index, columns=keys)
 
+
+def jsd_shannon(mixture_entropy, entropy_mixture):
+    """Jensen-Shannon divergence from Shannon entropies.
+
+    Jensen-Shannon divergence is calculated using pre-estimated Shannon
+    entropies, mixture_entropy - entropy_mixture. Takes into account that
+    mixture_entropy >= entropy_mixture must hold in order to avoid subtracting
+    values close to zero.
+
+    Parameters
+    ----------
+    mixture_entropy : array-like
+    entropy_mixture : array-like
+
+    Returns
+    -------
+    js_divergence : array-like
+
+    TODO
+    ----
+    - return exception if arrays don't broadcast
+    """
+
+    a = mixture_entropy
+    b = entropy_mixture
+    return np.where(np.isclose(a, 0.0), a, a - b)
+
+    ###############
+    # previous code
+    ###############
 
     if not qusetunion:
         return jsd_is(data)
@@ -211,7 +251,7 @@ def js_divergence(data, meta, subdivision=None):
 
         mask = [[1 if s in quset[level] else 0 for s in qusetunion]
                 for level in subdivision]
-        
+
         nproc = min(len(qusetunion), cpu_count())
         with Pool(processes=nproc) as pool:
             jsd_dataset = pool.map(jsd_is, dataset)
@@ -221,9 +261,10 @@ def js_divergence(data, meta, subdivision=None):
             args = ((jsd_dataset, m) for m in mask)
             div = pool.starmap(jsd_average, args)
 
-        import pdb; pdb.set_trace()
+        import pdb
+        pdb.set_trace()
         df = pd.concat(div, keys=title, axis=1)
-        
+
         return df
 
     #         elif depth == 1:
