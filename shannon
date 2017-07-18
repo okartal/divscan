@@ -60,7 +60,7 @@ def run_divergence(args):
 
     divergence(meta, chrom=args.sequence, data_columns=gpf_data,
                outfile=args.output, chunksize=args.chunk,
-               hierarchy=args.hierarchy)
+               hierarchy=args.hierarchy, data_url=args.files)
 
     return None
 

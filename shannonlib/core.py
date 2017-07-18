@@ -14,17 +14,17 @@ import shannonlib.gpf_utils as gpf
 
 
 def divergence(metadata, chrom=None, data_columns=None, outfile=None,
-               chunksize=None, hierarchy=None):
+               chunksize=None, hierarchy=None, data_url=None):
     """Output genome-wide divergence for a population.
     """
 
     regions_pct, regions = gpf.get_regions(
-        metadata['url'],
+        metadata[data_url],
         chrom=chrom,
         exp_numsites=chunksize)
 
     regions_data = gpf.get_data(
-        metadata['url'],
+        metadata[data_url],
         keys=metadata.index,
         data_columns=data_columns,
         regions=regions)
@@ -35,7 +35,7 @@ def divergence(metadata, chrom=None, data_columns=None, outfile=None,
             print('...{:>5} % (skipped empty region)'.format(progress))
             continue
 
-        div = est.js_divergence(data, metadata, hierarchy=hierarchy)
+        div = est.js_divergence(data, metadata, subdivision=hierarchy)
 
         if div.empty:
             continue
