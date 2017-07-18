@@ -24,17 +24,17 @@ logging.basicConfig(format="=== %(levelname)s === %(asctime)s === %(message)s",
                     level=logging.DEBUG, datefmt='%Y-%m-%d %H:%M:%S')
 
 
-def get_regions(tabixfiles, chrom=None, exp_numsites=1e3):
+def get_regions(files, chrom=None, exp_numsites=1e3):
     """Get stepsize and list of regions for tabix-indexed files.
     """
 
-    sup_position = supremum_position(tabixfiles, chrom)
+    sup_position = supremum_position(files, chrom)
 
     if sup_position == None:
         logging.info("Skipping because chromosome is missing.")
         return False
 
-    sup_numsites = supremum_numsites(tabixfiles, chrom)
+    sup_numsites = supremum_numsites(files, chrom)
 
     if sup_numsites == None or sup_numsites == 0:
         logging.info("Skipping because there are no entries.")
@@ -93,7 +93,7 @@ def get_data(files, keys=None, data_columns=None,
         # TODO
         pass
 
-    levels = ['sampling_unit', 'feature']
+    levels = ['sample', 'event']
 
     columns = [index + cols for cols in data_columns]
 
