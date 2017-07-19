@@ -241,7 +241,10 @@ def jsd_shannon(mixture_entropy, entropy_mixture):
 
     a = mixture_entropy
     b = entropy_mixture
-    return np.where(np.isclose(a, b), a, a - b)
+
+    js_divergence = np.where(np.isclose(a, b), a, a - b)
+    # js_divergence = np.where(a > b, a - b, 0.0)
+    return js_divergence
 
     ###############
     # previous code
