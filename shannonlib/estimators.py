@@ -154,29 +154,30 @@ def js_divergence(data, meta, subdivision=None, weight=None):
     - diff = lambda x: [x[i] - x[i+1] for i,n in enumerate(x) if i < len(x)-1]
     """
 
-    # preprocess
+
     if subdivision is None:
         subdivision = []
 
-    # initialize key list
-    template = 'J[{reference_id}:{divisor_id}{divisor_name}] (bit)'
-    keys = [template.format(reference_id='0', divisor_id='i', divisor_name='')]
+    # initialize keys with name of total JSD
+    template = 'J[{parent_level}:{child_level}{child_name}] (bit)'
+    keys = [template.format(
+        parent_level='0', child_level='', child_name='(i)')]
 
     if subdivision:
         quset = range(len(subdivision))
-        for n, level in enumerate(subdivision):
-            depth = n + 1
-            subdivided = depth < len(subdivision)
+        for i, name in enumerate(subdivision):
+            level = i + 1
+            subtree = level < len(subdivision)
             # add key
             key = template.format(
-                reference_id=str(n),
-                divisor_id=str(depth) if subdivided else 'i',
-                divisor_name='({})'.format(level) if subdivided else '')
+                parent_level=str(i),
+                child_level=str(level) if subtree else '',
+                child_name='({})'.format(name if subtree else 'i'))
             keys.append(key)
             # add quotient set
-            eqrel = subdivision[:depth]
-            groups = meta.groupby(eqrel).groups.values()
-            quset[n] = set(tuple(sorted(g)) for g in groups)  # if len(s) > 1 ?
+            eqrel = subdivision[:level]
+            quset[n] = meta.groupby(eqrel).groups.values()
+            # quset[n] = set(tuple(sorted(g)) for g in groups)  # if len(s) > 1 ?
 
         # Eliminate duplicate equivalence classes over all levels and keep track
         # at which level each unique class appears by using a boolean mask. This
@@ -185,33 +186,48 @@ def js_divergence(data, meta, subdivision=None, weight=None):
         mask = [[1 if eclass in quset[n] else 0 for eclass in uniq_classes]
                 for n, _ in enumerate(subdivision)]
 
-        entropy = range(len(subdivision) + 2)
+    # TODO for all sets in the terminal quset (leaves) do ensuring proper merge
+    # (concat) along axis 0 at construction of the entropy data frame
+    # preference: 
+    # - compute shannon entropy for each level in parallel -> make list of
+    #   series for each level, i.e. apply function that returns series in
+    #   parallel
 
-    # TODO for all sets in the terminal quset (leaves) do
-    # ensuring proper merge (concat) along axis 0 at construction of the entropy data frame
+    # NOTE! the mixture of a subtree at any level can always be calculated with
+    # the sample sizes of the sets in the terminal quset; different weighing of
+    # the leaf mixtures results from having a different composition for
+    # different subtrees; this makes everything easier, we just need to keep
+    # track of where the subtrees belong 
 
-    i_mixture = data.sum(axis=1, level='event')
+    leaf_mixtures = (data[subtree].sum(axis=1, level='event')
+                for subtree in quset[-1])
+    weights = (data[subtree].sum(axis=1, level='sample').notnull().sum(
+        axis=1) for subtree in quset[-1])
+
+    pd.concat(mixtures, axis=1)
+    pd.concat(weights, axis=1)
+
+    
     i_weights = data.sum(axis=1, level='sample')
     i_samples = i_weights.notnull().sum(axis=1)
     i_entropy = shannon_entropy(data.values.reshape(None), axis=None)
     
     g_mixture = np.average() # over all i!
 
-    entropy[first] = shannon_entropy(g_mixture)
-    entropy[last] = entropy[first] if entropy[first] close to 0 else np.average(i_entropy)
-
-    entropy_actual = np.where(np.isclose(entropy[-2], 0.0), entropy[-2], VALUE)
-    entropy.insert(-1, )
+    entropy = pd.concat(entropies, axis=1).fillna(0)
 
     # process entropy data
     mixture_entropy = entropy.iloc[:, :n].values
     entropy_mixture = entropy.iloc[:, 1:].values
+
     jsd = jsd_shannon(mixture_entropy, entropy_mixture)
 
     if subdivision:
-        root_mixture_entropy = entropy.iloc[:, 0].values
-        leaf_entropy_mixture = entropy.iloc[:, -1].values
-        jsd_total = jsd_shannon(root_mixture_entropy, leaf_entropy_mixture)
+        root_entropy = entropy.iloc[:, 0].values
+        leaf_entropy = entropy.iloc[:, -1].values
+    
+        jsd_total = jsd_shannon(root_entropy, leaf_entropy)
+    
         jsd = np.hstack([jsd_total, jsd])
 
     return pd.DataFrame(jsd, index=data.index, columns=keys)
@@ -250,28 +266,28 @@ def jsd_shannon(mixture_entropy, entropy_mixture):
     # previous code
     ###############
 
-    if not qusetunion:
-        return jsd_is(data)
-    else:
-        dataset = [data[list(s)] for s in qusetunion]
+    # if not qusetunion:
+    #     return jsd_is(data)
+    # else:
+    #     dataset = [data[list(s)] for s in qusetunion]
 
-        mask = [[1 if s in quset[level] else 0 for s in qusetunion]
-                for level in subdivision]
+    #     mask = [[1 if s in quset[level] else 0 for s in qusetunion]
+    #             for level in subdivision]
 
-        nproc = min(len(qusetunion), cpu_count())
-        with Pool(processes=nproc) as pool:
-            jsd_dataset = pool.map(jsd_is, dataset)
+    #     nproc = min(len(qusetunion), cpu_count())
+    #     with Pool(processes=nproc) as pool:
+    #         jsd_dataset = pool.map(jsd_is, dataset)
 
-        nproc = min(len(mask), cpu_count())
-        with Pool(processes=nproc) as pool:
-            args = ((jsd_dataset, m) for m in mask)
-            div = pool.starmap(jsd_average, args)
+    #     nproc = min(len(mask), cpu_count())
+    #     with Pool(processes=nproc) as pool:
+    #         args = ((jsd_dataset, m) for m in mask)
+    #         div = pool.starmap(jsd_average, args)
 
-        import pdb
-        pdb.set_trace()
-        df = pd.concat(div, keys=title, axis=1)
+    #     import pdb
+    #     pdb.set_trace()
+    #     df = pd.concat(div, keys=title, axis=1)
 
-        return df
+    #     return df
 
     #         elif depth == 1:
     #             div_average(div_quset)
