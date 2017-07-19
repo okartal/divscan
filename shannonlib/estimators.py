@@ -204,11 +204,14 @@ def js_divergence(data, meta, subdivision=None, weight=None):
     entropy.insert(-1, )
 
     # process entropy data
-    
-    jsd = jsd_shannon(entropy.iloc[:, :n].values, entropy.iloc[:, 1:].values)
+    mixture_entropy = entropy.iloc[:, :n].values
+    entropy_mixture = entropy.iloc[:, 1:].values
+    jsd = jsd_shannon(mixture_entropy, entropy_mixture)
 
     if subdivision:
-        jsd_total = jsd_shannon(entropy.iloc[:, 0].values, entropy.iloc[:, -1].values)
+        root_mixture_entropy = entropy.iloc[:, 0].values
+        leaf_entropy_mixture = entropy.iloc[:, -1].values
+        jsd_total = jsd_shannon(root_mixture_entropy, leaf_entropy_mixture)
         jsd = np.hstack([jsd_total, jsd])
 
     return pd.DataFrame(jsd, index=data.index, columns=keys)
@@ -238,7 +241,7 @@ def jsd_shannon(mixture_entropy, entropy_mixture):
 
     a = mixture_entropy
     b = entropy_mixture
-    return np.where(np.isclose(a, 0.0), a, a - b)
+    return np.where(np.isclose(a, b), a, a - b)
 
     ###############
     # previous code
