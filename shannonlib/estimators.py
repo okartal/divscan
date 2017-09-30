@@ -43,8 +43,7 @@ def js_divergence(indata, weights=None):
     data = indata[combined_filter]
 
     if data.empty:
-        print('...{:>5} % (skipped low-quality region)'.format(progress))
-        return data  # continue
+        return data
     else:
         data_unit = count_per_unit[combined_filter]
         data_feature = (data.sum(axis=1, level='feature').astype(np.int32))
