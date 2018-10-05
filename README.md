@@ -1,5 +1,7 @@
 # Shannon - Measuring Genomic Diversity using Information Theory
 
+*NOTE*: The code is usable but API may change in the future
+
 ## Requirements
 
 * git (see <https://git-scm.com/>)
