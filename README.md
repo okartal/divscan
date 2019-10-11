@@ -1,6 +1,6 @@
 # Shannon - Measuring Genomic Diversity using Information Theory
 
-*NOTE*: The code is usable but API may change in the future
+*NOTE*: The command line app is usable but installation, API, and implementation may change in the future
 
 ## Requirements
 
@@ -10,10 +10,9 @@
 ## Install
 
 1. Clone the repository.
-2. Make shannon and test.sh executable.
+2. Go into the folder and ensure that shannon is executable.
     ```
     $ chmod +x shannon
-    $ chmod +x tests/test.sh
     ```
 3. Put shannon in your path. Example:
    ```
@@ -29,7 +28,7 @@
 
 1. Activate environment
    ```
-   $ source activate shannon
+   $ conda activate shannon
    ```
 2. Run help
    ```
