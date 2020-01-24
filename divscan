@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+__author__ = 'Önder Kartal'
+
+import argparse
+import io
+import os
+import sys
+
+import pandas as pd
+
+from shannonlib.core import divergence
+
+
+def run_divergence(args):
+
+    if os.path.isfile(args.output) and not os.stat(args.output).st_size == 0:
+        msg = "-- Stopped!\n-- Output file exists and is not empty."
+        sys.exit(msg)
+
+    meta = args.input.read()
+
+    try:
+        sample = pd.read_csv(io.StringIO(meta), comment='#', header=0)
+        _ = sample['url']
+        _ = sample['label']
+    except KeyError:
+        try:
+            sample = pd.read_csv(io.StringIO(
+                meta), comment='#', header=0, sep='\t')
+            _ = sample['url']
+            _ = sample['label']
+        except KeyError:
+            msg = ('-- Stopped!\n'
+                   '-- Could not parse metadata.\n'
+                   '-- 1. Ensure that fields are tab- or comma-separated\n'
+                   '-- 2. Ensure that columns "url" and "label" are present')
+            sys.exit(msg)
+
+    # GPF data columns
+    try:
+        assert(len(args.dcols) == len(args.dnames))
+    except AssertionError:
+        msg = ('-- Stopped!\n'
+               '-- Length of --dcols and --dnames must match')
+        sys.exit(msg)
+
+    dtypes = [float if args.prob else int] * len(args.dcols)
+    dcols = [col - 1 for col in args.dcols]
+    gpf_data = [list(zip(dcols, args.dnames, dtypes))]
+
+    # if groupby is not None:
+    #     subsample_family = sample.groupby(groupby)
+    #     for key, subsample in subsample_family:
+    #         filename = groupname(by=groupby, name=key, fname=args.output)
+    #         divergence(subsample, chrom=args.sequence, data_columns=gpf_data,
+    #                    outfile=filename, chunksize=args.chunksize)
+    # else:
+    print('processing sequence {} ...'.format(args.sequence))
+    divergence(sample, chrom=args.region, data_columns=gpf_data,
+               outfile=args.output, chunksize=args.chunk)
+
+    return None
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
+    subparsers = parser.add_subparsers()
+
+    # main parser
+    parser.prog = 'divscan'
+    parser.description = '%(prog)s: flexible genome scans for diversity'
+
+    # jsd subparser
+    # parser_jsd = subparsers.add_parser('jsd', formatter_class=argparse.RawTextHelpFormatter)
+
+    # other possible subparsers
+    # parser_cluster = subparsers.add_parser('cluster')
+    # parser_segment = subparsers.add_parser('segment')
+    # parser_pileup = subparsers.add_parser('pileup')
+
+    parser.set_defaults(func=run_divergence)
+    
+    parser.add_argument('--prob', action='store_true',
+                            help='indicate that data are probabilites (default: counts)')
+
+    parser.add_argument('--chunk', metavar='SIZE', default=1e4,
+                            type=int, help=('set size of data to process in-memory'
+                            ' (default: %(default)d)\n- in terms of expected number of'
+                            ' genome positions\n- higher numbers lead to more'
+                            ' memory-hungry, faster computations'))
+
+    parser_required = parser.add_argument_group('required arguments')
+    
+    parser_required.add_argument('-i', '--input', metavar='FILE',
+                                     type=argparse.FileType('r'),
+                                     required=True, help=('metadata'
+                                     ' for GPFs\n- comment lines (#)'
+                                     ' are ignored\n- values must be'
+                                     ' comma- or tab-separated\n-'
+                                     ' first non-comment line must be'
+                                     ' header\n- "url" and "label"'
+                                     ' columns are required\n- if'
+                                     ' stdin is metadata use "--metadata -"'))
+
+    parser_required.add_argument('-o', '--output', metavar='FILE',
+                                 required=True, help='output filepath')
+
+    # TODO make this optional
+    parser_required.add_argument('-r', '--region', metavar='ID',
+                                 required=True, type=str,
+                                 help='query region (chromosome/scaffold) in GPF')
+
+    parser_required.add_argument('-c', '--dcols', metavar='INT',
+                                 nargs='+', required=True, type=int,
+                                 help='column numbers (1-based) in GPFs that hold data')
+
+    parser_required.add_argument('-n', '--dnames', metavar='STR',
+                                 nargs='+', required=True, type=str,
+                                 help='column names of data columns in same order')
+
+    args = parser.parse_args()
+
+    args.func(args)
