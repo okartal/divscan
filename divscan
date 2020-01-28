@@ -57,7 +57,7 @@ def run_divergence(args):
     #         divergence(subsample, chrom=args.sequence, data_columns=gpf_data,
     #                    outfile=filename, chunksize=args.chunksize)
     # else:
-    print('processing sequence {} ...'.format(args.sequence))
+    print('processing sequence {} ...'.format(args.region))
     divergence(sample, chrom=args.region, data_columns=gpf_data,
                outfile=args.output, chunksize=args.chunk)
 
