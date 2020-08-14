@@ -10,7 +10,7 @@ import sys
 
 import pandas as pd
 
-from shannonlib.core import divergence
+from divscan.core import divergence
 
 
 def run_divergence(args):

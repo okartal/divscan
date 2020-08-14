@@ -8,7 +8,7 @@ import numexpr as ne
 import numpy as np
 import pandas as pd
 
-import shannonlib.constants as constant
+from divscan.constants import LOG2E
 
 
 def shannon_entropy(countmatrix, axis=1, method='plug-in'):
@@ -59,10 +59,9 @@ def js_divergence(indata, weights=None):
             axis=1)
 
         div = data_feature
-        div.insert(0, 'JSD_bit_', constant.LOG2E *
-                   (mix_entropy - avg_entropy))
+        div.insert(0, 'JSD_bit_', LOG2E * (mix_entropy - avg_entropy))
         div.insert(1, 'sample size', samplesize[combined_filter])
-        div.insert(2, 'HMIX_bit_', constant.LOG2E * mix_entropy)
+        div.insert(2, 'HMIX_bit_', LOG2E * mix_entropy)
         # div['members'] = (data_unit.apply(lambda x: ','.join(x.dropna().index), axis=1))
 
         return div
