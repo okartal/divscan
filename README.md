@@ -17,10 +17,10 @@ Divscan combines a set of python functions and a command-line script to perform 
     ```
     $ chmod +x divscan.py
     ```
-3. Put divscan.py into your path of binaries, for example if a folder ``bin`` is already in your path, do
+3. Add a symbolic link to bin/divscan.py into your binaries folder
    ```
    $ cd <path-to-bin>
-   $ ln -s <path-to-divscan.py> # use sudo depending on <path-to-bin>
+   $ ln -s <path-to-divscan.py> divscan # use sudo depending on <path-to-bin>
    ```
 4. Create conda environment:
    ```
@@ -35,5 +35,5 @@ Divscan combines a set of python functions and a command-line script to perform 
    ```
 2. Test
    ```
-   $ shannon -h
+   $ divscan -h
    ```
