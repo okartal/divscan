@@ -1,36 +1,39 @@
-# Shannon - Measuring Genomic Diversity using Information Theory
+# divscan - Jensen-Shannon divergence for genomics
 
-*NOTE*: The command line app is usable but installation, API, and implementation may change in the future
+Divscan combines a set of python functions and a command-line script to perform genomic scans for Jensen-Shannon divergence over a given set of BED-like genome position files (GPFs). 
 
-## Requirements
+## How to run divscan in a conda environment
 
-* git (see <https://git-scm.com/>)
-* Miniconda for Python3 (see <https://conda.io/miniconda.html>)
+### Requirements
 
-## Install
+- POSIX-like operating systems
+- git (<https://git-scm.com/>)
+- miniconda3 (<https://conda.io/miniconda.html>), optional: Anaconda3
+
+### Installation
 
 1. Clone the repository.
-2. Go into the folder and ensure that shannon is executable.
+2. Ensure that bin/divscan.py is executable.
     ```
-    $ chmod +x shannon
+    $ chmod +x divscan.py
     ```
-3. Put shannon in your path. Example:
+3. Put divscan.py into your path of binaries, for example if a folder ``bin`` is already in your path, do
    ```
    $ cd <path-to-bin>
-   $ ln -s <path-to-shannon> # use sudo depending on <path-to-bin>
+   $ ln -s <path-to-divscan.py> # use sudo depending on <path-to-bin>
    ```
 4. Create conda environment:
    ```
    $ conda env create -f environment.yml
    ```
 
-## Run
+### Test and run
 
 1. Activate environment
    ```
-   $ conda activate shannon
+   $ conda activate divscan
    ```
-2. Run help
+2. Test
    ```
    $ shannon -h
    ```
